@@ -162,7 +162,7 @@ class FakeHomeRepository @Inject constructor() : HomeRepository {
             distanceKm = 0f,
             heading = 0,
             onGround = false,
-            trackedType = "scheduled",
+            trackedType = "schedule",
         )
     }
 

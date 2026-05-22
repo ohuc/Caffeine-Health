@@ -503,21 +503,23 @@ private fun TrackingTab(
                     key = { i -> flights[i].id },
                 ) { page ->
                     val flight = flights[page]
-                    FlightCard(
-                        flight = flight,
-                        onRemove = {
-                            // For the current page (and only when other pages exist),
-                            // slide to a neighbour first so removal feels continuous
-                            // instead of the page just blinking out.
-                            coroutineScope.launch {
-                                if (flights.size > 1 && page == pagerState.currentPage) {
-                                    val target = if (page == flights.lastIndex) page - 1 else page + 1
-                                    pagerState.animateScrollToPage(target)
-                                }
-                                onRemoveFlight(flight)
+                    val handleRemove: () -> Unit = {
+                        // For the current page (and only when other pages exist),
+                        // slide to a neighbour first so removal feels continuous
+                        // instead of the page just blinking out.
+                        coroutineScope.launch {
+                            if (flights.size > 1 && page == pagerState.currentPage) {
+                                val target = if (page == flights.lastIndex) page - 1 else page + 1
+                                pagerState.animateScrollToPage(target)
                             }
-                        },
-                    )
+                            onRemoveFlight(flight)
+                        }
+                    }
+                    if (isScheduledOnly(flight)) {
+                        ScheduledFlightCard(flight = flight, onRemove = handleRemove)
+                    } else {
+                        FlightCard(flight = flight, onRemove = handleRemove)
+                    }
                 }
                 // Page indicator dots + "X / N" pill — only meaningful with >1 flight.
                 AnimatedVisibility(
@@ -1242,6 +1244,7 @@ private val LiveBg = Color(0xFFA8E6A1)
 private val LiveInk = Color(0xFF0D2510)
 private val AirlineFallbackBg = Color(0xFFFFD24A)
 private val AirlineFallbackInk = Color(0xFF1A1500)
+private val ScheduledTint = Color(0xFFFFC56B)
 
 private val TimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -1444,6 +1447,206 @@ private fun FlightCard(flight: HaFlight, onRemove: () -> Unit = {}) {
             )
         }
     }
+}
+
+// ── Scheduled card — FR24 schedule entry without live position data ────
+// FR24 returns a "schedule" tracked_type for flights that exist in the
+// timetable but have not yet been assigned an aircraft / departed. In that
+// state the integration only guarantees id, flight_number, callsign and
+// tracked_type, so the live layout (route arc + altitude/speed/remaining)
+// collapses to zeros and dashes. This compact variant drops everything
+// that needs live data.
+private fun isScheduledOnly(f: HaFlight): Boolean {
+    if (f.trackedType?.equals("schedule", ignoreCase = true) == true) return true
+    // Defensive fallback: integration changed but every live signal is empty.
+    return f.altitudeFt == 0 && f.groundSpeedKts == 0 && f.distanceKm == 0f &&
+        f.originIata.isNullOrBlank() && f.destinationIata.isNullOrBlank() &&
+        f.realDeparture == null && f.estimatedDeparture == null &&
+        f.scheduledDeparture == null
+}
+
+@Composable
+private fun ScheduledFlightCard(flight: HaFlight, onRemove: () -> Unit = {}) {
+    val cs = MaterialTheme.colorScheme
+    val haptic = rememberAppHaptics()
+    val callsign = flight.callsign?.takeIf { it.isNotBlank() }
+    val airlineName = flight.airline?.takeIf { it.isNotBlank() }
+    val subline = listOfNotNull(callsign, airlineName).joinToString(" · ")
+        .ifEmpty { flight.flightNumber }
+    val monogram = (flight.airlineIata?.takeIf { it.isNotBlank() }
+        ?: flight.flightNumber.takeWhile { it.isLetter() }.take(2).uppercase()
+            .ifEmpty { flight.flightNumber.take(2).uppercase() })
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(cs.surfaceContainerHigh)
+            .padding(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "SCHEDULED FLIGHT",
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp,
+                letterSpacing = 1.2.sp,
+                color = cs.onSurfaceVariant,
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ScheduledChip()
+                Tap(onClick = {
+                    haptic.confirm()
+                    onRemove()
+                }) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(cs.surfaceContainerHighest),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = "Stop tracking ${flight.flightNumber}",
+                            tint = cs.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        // Identity row — flight number + airline subline, plane silhouette on the right
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = flight.flightNumber,
+                    fontFamily = InstrumentSerifFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 40.sp,
+                    lineHeight = 40.sp,
+                    letterSpacing = (-0.5).sp,
+                    color = cs.onSurface,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    AirlineBadge(monogram = monogram)
+                    Text(
+                        text = subline,
+                        fontFamily = InterFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        color = cs.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(ScheduledTint.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Flight,
+                    contentDescription = null,
+                    tint = ScheduledTint,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+
+        // Awaiting row — pulsing amber dot + explanation
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(ScheduledTint.copy(alpha = 0.15f))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            PulsingDot(color = ScheduledTint)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Awaiting departure",
+                    fontFamily = InterFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = cs.onSurface,
+                    maxLines = 1,
+                )
+                Text(
+                    text = "Live tracking begins when the aircraft is in the air.",
+                    fontFamily = InterFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 11.sp,
+                    color = cs.onSurfaceVariant,
+                    maxLines = 2,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScheduledChip() {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(ScheduledTint.copy(alpha = 0.22f))
+            .padding(start = 9.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        PulsingDot(color = ScheduledTint, size = 5.dp)
+        Text(
+            text = "Scheduled",
+            fontFamily = MontserratFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 11.sp,
+            letterSpacing = 0.2.sp,
+            color = ScheduledTint,
+        )
+    }
+}
+
+@Composable
+private fun PulsingDot(color: Color, size: Dp = 6.dp) {
+    val infinite = rememberInfiniteTransition(label = "sched-pulse")
+    val alpha by infinite.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "sched-pulse-alpha",
+    )
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(color.copy(alpha = alpha)),
+    )
 }
 
 // ── Pulsing "Live" chip ────────────────────────────────────────────────
