@@ -1,0 +1,40 @@
+*.iml
+.gradle
+/local.properties
+local.properties
+
+# IDE
+.idea/
+.vscode/
+.claude/
+
+CLAUDE.md
+
+# Kotlin compiler errors
+.kotlin/
+
+# Build outputs
+/build
+app/build/
+/captures
+.externalNativeBuild
+.cxx
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Generated Gradle toolchain file (uses Foojay API URLs, not needed at build time)
+gradle/gradle-daemon-jvm.properties
+
+# Temp / dev artifacts
+tmp_vico/
+artifacts/
+
+# Backup files
+*- Backup*
+*- Copy*
+
+# Built APKs (attached to GitHub Releases instead)
+app/release/

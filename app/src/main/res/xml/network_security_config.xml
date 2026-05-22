@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext (HTTP/WS) to all hosts including local IPs -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </base-config>
+    <!-- Explicit override for local network ranges — required on Android 14+ -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">homeassistant.local</domain>
+        <domain includeSubdomains="true">local</domain>
+    </domain-config>
+</network-security-config>

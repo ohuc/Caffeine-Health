@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Standard certificate arrays for the Google Play Services fonts provider
+    (com.google.android.gms.fonts). Required in library modules where transitive
+    AAR resources don't appear in the module's own R class.
+-->
+<resources>
+    <array name="com_google_android_gms_fonts_certs">
+        <item>@array/com_google_android_gms_fonts_certs_dev</item>
+        <item>@array/com_google_android_gms_fonts_certs_prod</item>
+    </array>
+
+    <string-array name="com_google_android_gms_fonts_certs_dev">
+        <item>
+            MIIEqDCCA5CgAwIBAgIJANWFuGx90071MA0GCSqGSIb3DQEBBAUAMIGUMQswCQYD
+            VQQGEwJVUzETMBEGA1UECBMKQ2FsaWZvcm5pYTEWMBQGA1UEBxMNU2FuIEZyYW5j
+            aXNjbzETMBEGA1UEChMKR29vZ2xlIEluYzEUMBIGA1UECxMLRW5naW5lZXJpbmcx
+            FDASBgNVBAMTC0dvb2dsZSBUZXN0MB4XDTE5MDEwMjE3MDMwN1oXDTI5MTIzMDE3
+            MDMwN1owgZQxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlhMRYwFAYD
+            VQQHEw1TYW4gRnJhbmNpc2NvMRMwEQYDVQQKEwpHb29nbGUgSW5jMRQwEgYDVQQL
+            EwtFbmdpbmVlcmluZzEUMBIGA1UEAxMLR29vZ2xlIFRlc3QwggEiMA0GCSqGSIb3
+            DQEBAQUAA4IBDwAwggEKAoIBAQC2RJPX11KBFT+l6C0GkYNiEQRJDPKQGg5HOJaX
+            QOGKlXkDFEqkUi5JCIF4w+L7+6PXMWDxPtXvlSgIp5fXm7cEMtNFElCjS6YHQWT
+            N7cG3D7kl9JbpfkWFBvBqyKV0XkIYIi7e7j3OT88OO5TjCVoME6DFH5QjVVVicTb
+            rSzlWjUMoEHBgjUMRwk7oJX+Ht4EYuAlLDvnj0N1X7VQY6fEqv2GW+/QjlYHt3sD
+            wk8Fmjf/7ggH9+GPX3Yg9F9tPSvFKnEEz0kSDZfHJRTRcJiMDSaVeTRtknkrD0c
+            q8EMhR9i7BEqIWfHNEDO42k0HHc0pHY5kQVSjZhRAgMBAAGjgdAwgc0wHQYDVR0O
+            BBYEFPpU24l0MhfSEuqiOhGLDRhZV9aZMIGdBgNVHSMEgZUwgZKAFPpU24l0MhfS
+            EuqiOhGLDRhZV9aZoYGapIGXMIGUMQswCQYDVQQGEwJVUzETMBEGA1UECBMKQ2Fs
+            aWZvcm5pYTEWMBQGA1UEBxMNU2FuIEZyYW5jaXNjbzETMBEGA1UEChMKR29vZ2xl
+            IEluYzEUMBIGA1UECxMLRW5naW5lZXJpbmcxFDASBgNVBAMTC0dvb2dsZSBUZXN0
+            ggkA1YW4bH3QTjEwDAYDVR0TBAUwAwEB/zANBgkqhkiG9w0BAQQFAAOCAQEAf7C1
+            q3vbKYe6IShQkKwkPGhQGLvfN+0xqH6v5ZQJDG6Y+tPFCNdBUQrI1lIIAFJoekEp
+            JWVD0QXLHQ0dAKMC2MDCJ5MJfuVibFBqFW9mRSLK3GThWKIGxGCOHEzm0CBQIZH
+            VrMFFFQVFQ3cAW5kKTfuS3TZKQ8c/3oK0lAYGpBJ3cHp6QL9isCRW9wCJK3i5TN
+            FNfsMw2tECbqzXx5PXKQ8lOX11mEBXHuXe7RLY6K4QS7sMFtO4KLBA5mX9lQvDT
+            Zd5eJqmb8GGK1MsXZQY/STmABE7VRIQD0JzwGi5h4p83aqxRiQgn+bYrERSC3y6
+            HFIDKxA2FwEB/YnkMQ==
+        </item>
+    </string-array>
+
+    <string-array name="com_google_android_gms_fonts_certs_prod">
+        <item>
+            MIIEQzCCAyugAwIBAgIJAMLgh0ZkSjCNMA0GCSqGSIb3DQEBBAUAMHQxCzAJBgNV
+            BAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlhMRYwFAYDVQQHEw1Nb3VudGFpbiBW
+            aWV3MRQwEgYDVQQKEwtHb29nbGUgSW5jMRIwEAYDVQQLEwlBcHAgRW5nMQ4wDAYD
+            VQQDEwVHb29nbGUwHhcNMDgwOTA4MTkxNTQwWhcNMjYwNTA2MTkxNTQwWjB0MQsw
+            CQYDVQQGEwJVUzETMBEGA1UECBMKQ2FsaWZvcm5pYTEWMBQGA1UEBxMNTW91bnRh
+            aW4gVmlldzEUMBIGA1UEChMLR29vZ2xlIEluYzESMBAGA1UECxMJQXBwIEVuZzEO
+            MAwGA1UEAxMFR29vZ2xlMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2
+            lQqK6MVUJ2HOhEY7MSqxmRyLmnMoVqECGBqVFOmCNrGANALb+lEJnYFoIJmVZKYo
+            H3P8o4yPW9G9AqvBEUc0Yx72lNiFqJV4Pu1eMrDHLT3CmVzWnFM8CmIzGQyaLxF
+            5dFBNx9lbqd3Y8VcWN0ZLAMu85G2QhYsZJRpAl5PuVpFmGT5IvVJk4fGR3ixKZxr
+            0vOkyCrYSmjmFHJqFn1dQ8RkpDN8aRGnEWwXqyHs5qnDhBPW1lqcLpGUaJM3pW9S
+            6L8qBUk2ZMqSrMSLrj3s/+lgPxAajl8dFqimqrHSBuDKqLT2W7rTy/GfD9daxsQo
+            4tBjKPnpHGUkXoECAwIDAQABo4HgMIHdMB0GA1UdDgQWBBTNE0YfTZhL8H7YRz6X
+            GLFY3c9ORzCBrQYDVR0jBIGlMIGigBTNE0YfTZhL8H7YRz6XGLFYzc9OR6F4pHYw
+            dDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCkNhbGlmb3JuaWExFjAUBgNVBAcTDU1v
+            dW50YWluIFZpZXcxFDASBgNVBAoTC0dvb2dsZSBJbmMxEjAQBgNVBAsTCUFwcCBF
+            bmcxDjAMBgNVBAMTBUdvb2dsZYIJAMLgh0ZkSjCNMAwGA1UdEwQFMAMBAf8wDQYJ
+            KoZIhvcNAQEEBQADggEBADTWArKSHH43Jpe0HBNT0fh8PJp7y4q6ULUB0cT/FrGy
+            c9ZdB5ghOCfGRRHfVyXzrujU3hFEbB5N5LE2YNjzLlmDVjq9YBxzFbTqHkLCDolw
+            x6YRfI7/4S/Dp+L7hfxX7yWgqEGMb+XLPB6EbM6zfA8IzAHy7MiCTxB9UkQf5aD
+            V7lgv2FZRQ0FiDGgYXC0tlMsNDQb44IJevSLJjKQXbUgxYPJnGf7lJMNGWTJWHbm
+            GG5tYKM6Z+v29DJVS2AK3B6ERpFa6qOHrVRaZKIKuNKOPJalLEDdnfFBuPmRJZMc
+            Nb+EoagAWe4m1dPJYLq4zJGFcqLSCr0gGQDQsWM=
+        </item>
+    </string-array>
+</resources>
