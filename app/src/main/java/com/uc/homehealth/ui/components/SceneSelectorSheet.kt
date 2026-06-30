@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uc.homehealth.data.HaScene
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
+import com.uc.homehealth.ui.theme.MontserratFamily
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 
@@ -54,7 +54,7 @@ fun SceneSelectorSheet(
             )
             Text(
                 text = if (available.isEmpty()) "No scenes available" else "${available.size} scene${if (available.size == 1) "" else "s"} from Home Assistant",
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,
@@ -71,7 +71,7 @@ fun SceneSelectorSheet(
             ) {
                 Text(
                     text = "Connect to Home Assistant to load your scenes.",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontSize = 13.sp,
                     color = cs.onSurfaceVariant,
                 )

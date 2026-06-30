@@ -16,6 +16,27 @@ import javax.inject.Singleton
 const val HA_CLIENT_ID = "http://homehealth.local/"
 const val HA_REDIRECT_URI = "http://homehealth.local/auth-callback"
 
+/**
+ * Strip characters that can never appear in an HA token but routinely sneak into a
+ * copy-paste: whitespace (including interior line breaks from wrapped text), zero-width
+ * spaces/joiners, BOM, soft hyphens, and other control/format characters. HA access and
+ * refresh tokens are JWT/base64url strings, so none of these are ever legitimate — and a
+ * single invisible character makes HA reject the token and log a failed login attempt.
+ */
+fun sanitizeHaToken(raw: String): String = raw.filterNot {
+    it.isWhitespace() || it.category == CharCategory.FORMAT || it.category == CharCategory.CONTROL
+}
+
+/**
+ * `/auth/token` answered with an HTTP error. 4xx means HA definitively rejected the
+ * grant (revoked/expired refresh token, bad code, wrong client_id) — retrying would just
+ * add failed-login entries to HA's log and tick its ip_ban counter. Anything else is
+ * transient (proxy hiccup, HA restarting) and safe to retry.
+ */
+class HaAuthHttpException(val code: Int) : Exception("auth/token returned HTTP $code") {
+    val isDefinitiveRejection: Boolean get() = code in 400..499
+}
+
 data class TokenResponse(
     val accessToken: String,
     val refreshToken: String,
@@ -60,12 +81,15 @@ class HaAuthManager @Inject constructor(private val okHttpClient: OkHttpClient) 
                 .url("${haUrl.trimEnd('/')}/auth/token")
                 .post(body)
                 .build()
-            val json = JSONObject(okHttpClient.newCall(req).execute().body!!.string())
-            TokenResponse(
-                accessToken = json.getString("access_token"),
-                refreshToken = json.getString("refresh_token"),
-                expiresIn = json.getInt("expires_in"),
-            )
+            okHttpClient.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) throw HaAuthHttpException(resp.code)
+                val json = JSONObject(resp.body?.string().orEmpty())
+                TokenResponse(
+                    accessToken = json.getString("access_token"),
+                    refreshToken = json.getString("refresh_token"),
+                    expiresIn = json.getInt("expires_in"),
+                )
+            }
         }
 
     suspend fun refreshToken(haUrl: String, refreshToken: String): TokenResponse =
@@ -79,11 +103,14 @@ class HaAuthManager @Inject constructor(private val okHttpClient: OkHttpClient) 
                 .url("${haUrl.trimEnd('/')}/auth/token")
                 .post(body)
                 .build()
-            val json = JSONObject(okHttpClient.newCall(req).execute().body!!.string())
-            TokenResponse(
-                accessToken = json.getString("access_token"),
-                refreshToken = if (json.has("refresh_token")) json.getString("refresh_token") else refreshToken,
-                expiresIn = json.getInt("expires_in"),
-            )
+            okHttpClient.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) throw HaAuthHttpException(resp.code)
+                val json = JSONObject(resp.body?.string().orEmpty())
+                TokenResponse(
+                    accessToken = json.getString("access_token"),
+                    refreshToken = if (json.has("refresh_token")) json.getString("refresh_token") else refreshToken,
+                    expiresIn = json.getInt("expires_in"),
+                )
+            }
         }
 }

@@ -5,6 +5,7 @@ ksp = "2.3.6"
 composeBom = "2026.03.01"
 material3 = "1.5.0-alpha19"
 coreKtx = "1.16.0"
+coreSplashscreen = "1.0.1"
 activityCompose = "1.10.1"
 lifecycleRuntimeKtx = "2.11.0-beta01"
 lifecycleViewmodelCompose = "2.11.0-beta01"
@@ -12,14 +13,19 @@ navigationCompose = "2.10.0-alpha02"
 navigation3 = "1.1.0"
 hilt = "2.59.1"
 hiltNavigationCompose = "1.2.0"
+androidxHilt = "1.2.0"
+work = "2.10.1"
 okhttp = "5.3.0"
 retrofit = "3.0.0"
 coroutines = "1.11.0"
+kotlinxSerializationJson = "1.9.0"
 room = "2.8.4"
 datastore = "1.2.1"
 haze = "1.5.1"
 coil = "2.7.0"
 media3 = "1.4.1"
+webrtc = "125.6422.07"
+maplibre = "11.8.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
@@ -27,6 +33,7 @@ espressoCore = "3.6.1"
 [libraries]
 # Core Android
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 
 # Compose BOM + UI (versions managed by BOM except material3)
@@ -58,6 +65,12 @@ hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
 androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
 
+# WorkManager — persistent background scheduling (date-scheduled flight tracking).
+# androidx.hilt artifacts inject Hilt deps into workers (HiltWorkerFactory).
+androidx-work-runtime = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "androidxHilt" }
+androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "androidxHilt" }
+
 # Network
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
@@ -66,6 +79,10 @@ retrofit-converter-gson = { group = "com.squareup.retrofit2", name = "converter-
 
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+
+# kotlinx.serialization JSON runtime — persists the scheduled-flight queue in DataStore.
+# (The plugin is already applied for Navigation 3 routes, which only need the core.)
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 
 # Room
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
@@ -82,10 +99,18 @@ haze-materials = { group = "dev.chrisbanes.haze", name = "haze-materials", versi
 # Coil — async image loading (used for aircraft photos in Flight sheet)
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 
-# Media3 / ExoPlayer — HLS playback for camera widget detail sheet
+# Media3 / ExoPlayer — HLS playback for camera widget detail sheet (WebRTC fallback)
 androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
 androidx-media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "media3" }
 androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
+
+# WebRTC — low-latency live camera streaming in the detail sheet (maintained google-webrtc fork)
+webrtc-android = { group = "io.github.webrtc-sdk", name = "android", version.ref = "webrtc" }
+
+# MapLibre Native — vector-tile maps for the person location widget. Open-source
+# (Mapbox GL fork), no API key. Renders the live interactive map + off-screen
+# snapshots (MapSnapshotter) reused for the planned home-screen App Widget.
+maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.ref = "maplibre" }
 
 # Google Fonts
 androidx-compose-ui-text-google-fonts = { group = "androidx.compose.ui", name = "ui-text-google-fonts" }

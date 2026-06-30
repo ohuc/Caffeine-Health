@@ -3,6 +3,7 @@ package com.uc.homehealth.ui.components
 import android.graphics.Color as AndroidColor
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -16,14 +17,12 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
@@ -45,11 +44,15 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,33 +60,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uc.homehealth.data.HaLight
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
 import com.uc.homehealth.ui.theme.MontserratFamily
 import com.uc.homehealth.ui.theme.PillShape
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private val InkColor = Color(0xFF1A0F08)
@@ -92,7 +88,6 @@ private data class ScenePreset(val name: String, val brightness: Int, val kelvin
 
 // ─── Public composable ────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun LightTile(
     light: HaLight,
@@ -115,18 +110,13 @@ fun LightTile(
         catch (_: Exception) { Color(0xFFFFD9A8) }
     }
     val cs = MaterialTheme.colorScheme
-    val hazeState = remember { HazeState() }
-    val glowAlpha by animateFloatAsState(
-        targetValue = if (on) 0.22f + (light.brightness / 100f) * 0.58f else 0f,
-        animationSpec = tween(durationMillis = 500),
-        label = "light_glow_alpha",
-    )
 
     Box(
         modifier = modifier
             .defaultMinSize(minHeight = 144.dp)
             .alpha(if (available) 1f else 0.55f)
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(cs.surfaceContainerHigh)
             .then(
                 if (available) Modifier.clickable(
                     indication = null,
@@ -135,31 +125,9 @@ fun LightTile(
                 ) else Modifier
             )
     ) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(cs.surfaceContainerHigh)
-                .haze(state = hazeState),
-        ) {
-            Canvas(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(160.dp),
-            ) {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(lightColor.copy(alpha = glowAlpha), Color.Transparent),
-                        center = Offset(size.width, 0f),
-                        radius = size.width * 0.9f,
-                    ),
-                )
-            }
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .hazeChild(state = hazeState, style = HazeMaterials.ultraThin())
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -168,7 +136,7 @@ fun LightTile(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                InsetGlowWell(on = on, lightColor = lightColor)
+                BulbWell(on = on, lightColor = lightColor)
                 LightPillToggle(
                     on = on,
                     enabled = available,
@@ -180,11 +148,19 @@ fun LightTile(
             Column {
                 Text(
                     text = light.name,
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
                     letterSpacing = (-0.2).sp,
                     color = cs.onSurface,
+                    // Collapsed: keep it one line but let an over-long name scroll
+                    // (basicMarquee only animates when it actually overflows) so the
+                    // full name stays readable instead of being cut to an ellipsis.
+                    // Expanded: wrap to as many lines as needed.
+                    maxLines = if (expanded) Int.MAX_VALUE else 1,
+                    softWrap = expanded,
+                    overflow = if (expanded) TextOverflow.Ellipsis else TextOverflow.Clip,
+                    modifier = if (expanded) Modifier else Modifier.basicMarquee(),
                 )
                 Text(
                     text = when {
@@ -205,10 +181,10 @@ fun LightTile(
             }
 
             if (!expanded) {
-                DragBar(
-                    on = on && available,
+                BrightnessSlider(
                     brightness = light.brightness,
-                    lightColor = lightColor,
+                    enabled = on && available,
+                    accent = lightColor,
                     onBrightnessChange = onBrightnessChange,
                     onBrightnessChangeFinished = onBrightnessChangeFinished,
                 )
@@ -241,48 +217,70 @@ fun LightTile(
 
 @Composable
 private fun BulbGlyphCanvas(on: Boolean, color: Color, modifier: Modifier = Modifier) {
+    // A single spring-driven fraction morphs the whole glyph so the rays, dome
+    // fill, highlight and base all move together instead of snapping. The gentle
+    // overshoot gives the bulb a subtle "pop" as it lights up.
+    val onFraction by animateFloatAsState(
+        targetValue = if (on) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 350f),
+        label = "bulb_on",
+    )
+    val lit = onFraction.coerceIn(0f, 1f)            // clamped copy for colours/alpha
+    val offGrey = Color(0xFF6A6A70)
+    val baseColor = lerp(offGrey, InkColor, lit)
+
     Canvas(modifier = modifier.size(36.dp)) {
         val cx = 18.dp.toPx()
         val cy = 16.dp.toPx()
         val r  = 9.dp.toPx()
 
-        // Rays — 6 lines at 0/60/120/180/240/300°, from r=14dp to r=17dp
-        if (on) {
+        // Rays — 6 ticks at 0/60/120/180/240/300° that sprout outward from the
+        // dome and fade in as the bulb lights.
+        if (lit > 0.01f) {
+            val inner = 14.dp.toPx()
+            val outer = (14f + 3f * onFraction).dp.toPx()
             for (deg in listOf(0, 60, 120, 180, 240, 300)) {
                 val a = ((deg - 90) * Math.PI / 180.0).toFloat()
                 drawLine(
-                    color = color.copy(alpha = 0.85f),
-                    start = Offset(cx + cos(a) * 14.dp.toPx(), cy + sin(a) * 14.dp.toPx()),
-                    end   = Offset(cx + cos(a) * 17.dp.toPx(), cy + sin(a) * 17.dp.toPx()),
+                    color = color.copy(alpha = 0.85f * lit),
+                    start = Offset(cx + cos(a) * inner, cy + sin(a) * inner),
+                    end   = Offset(cx + cos(a) * outer, cy + sin(a) * outer),
                     strokeWidth = 2.4.dp.toPx(),
                     cap = StrokeCap.Round,
                 )
             }
         }
 
-        // Dome
-        if (on) {
-            drawCircle(color = color, radius = r, center = Offset(cx, cy), style = Fill)
-        } else {
+        // Dome — the off ring fades out while the on fill fades + pops in, so the
+        // two states crossfade rather than swap.
+        if (lit < 0.999f) {
             drawCircle(
-                color = Color(0x666A6A70),
+                color = offGrey.copy(alpha = 0.4f * (1f - lit)),
                 radius = r,
                 center = Offset(cx, cy),
                 style = Stroke(width = 2.dp.toPx()),
             )
         }
+        if (lit > 0.001f) {
+            val pop = 0.9f + 0.1f * onFraction       // 0.9 → 1.0 with slight overshoot
+            drawCircle(
+                color = color.copy(alpha = lit),
+                radius = r * pop,
+                center = Offset(cx, cy),
+                style = Fill,
+            )
+        }
 
-        // Highlight ellipse at (15,13) rx=3 ry=2
-        if (on) {
+        // Highlight ellipse at (15,13) rx=3 ry=2 — fades in with the dome
+        if (lit > 0.01f) {
             drawOval(
-                color = Color.White.copy(alpha = 0.45f),
+                color = Color.White.copy(alpha = 0.45f * lit),
                 topLeft = Offset((15 - 3).dp.toPx(), (13 - 2).dp.toPx()),
                 size = Size(6.dp.toPx(), 4.dp.toPx()),
             )
         }
 
-        // Filament base: two rounded rects
-        val baseColor = if (on) InkColor else Color(0xFF6A6A70)
+        // Filament base: two rounded rects — crossfades grey → ink with the dome
         drawRoundRect(
             color = baseColor,
             topLeft = Offset(14.5.dp.toPx(), 24.dp.toPx()),
@@ -298,32 +296,22 @@ private fun BulbGlyphCanvas(on: Boolean, color: Color, modifier: Modifier = Modi
     }
 }
 
-// ─── InsetGlowWell ───────────────────────────────────────────────────────────
-// 46×46dp rounded square containing the bulb glyph.
-// Radial gradient inner glow via drawWithContent when on.
+// ─── BulbWell ────────────────────────────────────────────────────────────────
+// 46×46dp rounded square containing the bulb glyph. Neutral surface; the only
+// colour is the glyph itself (accent when on), per the flat/clean treatment.
 
 @Composable
-private fun InsetGlowWell(on: Boolean, lightColor: Color) {
+private fun BulbWell(on: Boolean, lightColor: Color) {
+    val wellColor by animateColorAsState(
+        targetValue = if (on) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.03f),
+        animationSpec = tween(300),
+        label = "bulb_well_bg",
+    )
     Box(
         modifier = Modifier
             .size(46.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(
-                if (on) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.03f),
-                RoundedCornerShape(14.dp),
-            )
-            .drawWithContent {
-                drawContent()
-                if (on) {
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(lightColor.copy(alpha = 0.33f), Color.Transparent),
-                            center = Offset(size.width / 2f, size.height / 2f),
-                            radius = size.width * 0.8f,
-                        )
-                    )
-                }
-            },
+            .clip(RoundedCornerShape(16.dp))
+            .background(wellColor, RoundedCornerShape(16.dp)),
         contentAlignment = Alignment.Center,
     ) {
         BulbGlyphCanvas(on = on, color = lightColor, modifier = Modifier.size(32.dp))
@@ -385,69 +373,55 @@ private fun LightPillToggle(
     }
 }
 
-// ─── DragBar ─────────────────────────────────────────────────────────────────
-// 8dp tall brightness track. Pointer down consumes the event so the tile's
-// clickable (expand toggle) does not fire when the user adjusts brightness.
+// ─── BrightnessSlider ──────────────────────────────────────────────────────────
+// The Material 3 Expressive Slider (thick track, active/inactive gap, thin handle
+// that narrows on press, end stop indicator) tinted with the bulb/room accent.
+// Controlled by `brightness`; reports continuously and once on release. Adds a
+// 5% segment-tick + release haptic on top of the stock component.
 
 @Composable
-private fun DragBar(
-    on: Boolean,
+fun BrightnessSlider(
     brightness: Int,
-    lightColor: Color,
+    enabled: Boolean,
+    accent: Color,
     onBrightnessChange: (Int) -> Unit,
     onBrightnessChangeFinished: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(8.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(Color.White.copy(alpha = 0.06f))
-            .pointerInput(on) {
-                if (!on) return@pointerInput
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    down.consume()
-                    val initial = ((down.position.x / size.width.toFloat()) * 100).toInt().coerceIn(0, 100)
-                    var current = initial
-                    onBrightnessChange(initial)
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull() ?: break
-                        if (!change.pressed) {
-                            onBrightnessChangeFinished(current)
-                            break
-                        }
-                        change.consume()
-                        val next = ((change.position.x / size.width.toFloat()) * 100).toInt().coerceIn(0, 100)
-                        current = next
-                        onBrightnessChange(next)
-                    }
-                }
+    val haptic = rememberAppHaptics()
+    // Last raw drag value, so onValueChangeFinished (which takes no argument) can
+    // report the final brightness.
+    val latest = remember { mutableFloatStateOf(brightness.toFloat()) }
+    val lastBucket = remember { mutableIntStateOf(brightness / 5) }
+
+    Slider(
+        value = brightness.toFloat().coerceIn(0f, 100f),
+        onValueChange = { v ->
+            latest.floatValue = v
+            val b = v.roundToInt()
+            val bucket = b / 5
+            if (bucket != lastBucket.intValue) {
+                lastBucket.intValue = bucket
+                haptic.segmentTick()
             }
-    ) {
-        if (on) {
-            // Fill
-            Box(
-                modifier = Modifier
-                    .height(8.dp)
-                    .fillMaxWidth(brightness / 100f)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(lightColor)
-            )
-            // Knob
-            val knobOffset = (maxWidth * (brightness / 100f) - 5.dp).coerceAtLeast(0.dp)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .offset(x = knobOffset)
-                    .size(width = 10.dp, height = 12.dp)
-                    .shadow(elevation = 1.dp, shape = RoundedCornerShape(5.dp))
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(Color.White)
-            )
-        }
-    }
+            onBrightnessChange(b)
+        },
+        onValueChangeFinished = {
+            haptic.gestureEnd()
+            onBrightnessChangeFinished(latest.floatValue.roundToInt())
+        },
+        enabled = enabled,
+        valueRange = 0f..100f,
+        colors = SliderDefaults.colors(
+            thumbColor = accent,
+            activeTrackColor = accent,
+            inactiveTrackColor = Color.White.copy(alpha = 0.14f),
+            disabledThumbColor = Color.White.copy(alpha = 0.30f),
+            disabledActiveTrackColor = Color.White.copy(alpha = 0.18f),
+            disabledInactiveTrackColor = Color.White.copy(alpha = 0.08f),
+        ),
+        modifier = modifier.fillMaxWidth(),
+    )
 }
 
 // ─── LightExpandedContent ────────────────────────────────────────────────────
@@ -542,7 +516,7 @@ private fun LightExpandedContent(
                         ) {
                             Text(
                                 text = label,
-                                fontFamily = InterFamily,
+                                fontFamily = MontserratFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
                             )
@@ -552,12 +526,13 @@ private fun LightExpandedContent(
             }
         }
 
-        // SquigglySlider for brightness
-        SquigglySlider(
-            value = light.brightness,
-            onValueChange = onBrightnessChange,
-            onValueChangeFinished = onBrightnessChangeFinished,
-            color = lightColor,
+        // Brightness slider (Material 3 Expressive)
+        BrightnessSlider(
+            brightness = light.brightness,
+            enabled = true,
+            accent = lightColor,
+            onBrightnessChange = onBrightnessChange,
+            onBrightnessChangeFinished = onBrightnessChangeFinished,
         )
 
         // Warmth strip or color swatches. Slides between the two when the user
@@ -679,7 +654,7 @@ private fun LightExpandedContent(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             preset.name,
-                            fontFamily = InterFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
                             color = cs.onSurface,

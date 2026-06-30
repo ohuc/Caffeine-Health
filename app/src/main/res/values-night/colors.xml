@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash screen (dark). Onyx background matches the app's dark surface; the
+         white icon circle is shared with the light variant, holding the taupe + sand
+         Pulse House on a white disc like the companion "Caffeine Health" mark. -->
+    <color name="splash_background">#0E0E10</color>
+    <color name="splash_icon_circle">#FFFFFF</color>
+</resources>

@@ -1,6 +1,7 @@
 package com.uc.homehealth.ui.components
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -21,18 +22,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.outlined.Cast
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.RepeatOne
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shuffle
 import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,7 +56,8 @@ import coil.compose.AsyncImage
 import com.uc.homehealth.data.HaMedia
 import com.uc.homehealth.data.MediaRepeatMode
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
+import com.uc.homehealth.ui.theme.MontserratFamily
+import com.uc.homehealth.ui.theme.PillShape
 
 // Bundle of media-control callbacks plumbed through the room sheet. Each
 // closure takes the target entityId so a single callbacks object can serve
@@ -66,19 +68,19 @@ data class MediaCardCallbacks(
     val onSkipNext: (entityId: String) -> Unit = {},
     val onToggleShuffle: (entityId: String, current: Boolean) -> Unit = { _, _ -> },
     val onCycleRepeat: (entityId: String, current: MediaRepeatMode) -> Unit = { _, _ -> },
-    val onOpenQueue: (entityId: String) -> Unit = {},
-    val onCast: (entityId: String) -> Unit = {},
     val onSeek: (entityId: String, progress: Float) -> Unit = { _, _ -> },
     val onVolumeChange: (entityId: String, volume: Float) -> Unit = { _, _ -> },
+    // Opens the announce/text-to-speech composer targeting this player.
+    val onAnnounce: (entityId: String) -> Unit = {},
+    // Opens the Music Assistant search sheet (MA players only).
+    val onSearchMusic: (entityId: String) -> Unit = {},
 )
 
-// Hero (C) media card. Full-width "Now Playing" surface with rotating
-// material shape art (or album art if HA exposes one), big serif title,
-// squiggly progress, M3 Expressive ButtonGroup transport with bouncy
-// neighbor compression, ButtonGroup utility chips, and a volume pill.
-//
-// Background was simplified from the original purple gradient to a flat
-// surfaceContainerHigh so it matches the surrounding Climate / More tabs.
+// Hero media card: art + serif title (the hero), squiggly progress, an expressive
+// ButtonGroup transport with bouncy neighbor compression, and ONE settle row —
+// volume with shuffle/repeat toggles beside it. Accent is the theme's primary
+// (mauve in dark, deep mauve in light), so the card themes correctly; containers
+// are onSurface washes so the wells survive light theme too.
 @Composable
 fun MediaCardHero(
     media: HaMedia,
@@ -87,25 +89,28 @@ fun MediaCardHero(
     onSkipNext: () -> Unit,
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
-    onOpenQueue: () -> Unit,
-    onCast: () -> Unit,
     onSeek: (Float) -> Unit,
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    onAnnounce: () -> Unit = {},
+    onSearchMusic: () -> Unit = {},
+    // Overridable so callers can pair the card with an attached sibling surface
+    // (the Music page groups it with the queue card via grouped corners).
+    shape: Shape = MaterialTheme.shapes.large,
 ) {
     val cs = MaterialTheme.colorScheme
-    val accent = Color(0xFFE8B4D6)
-    val ink = Color(0xFF2A0F22)
+    val accent = cs.primary
+    val ink = cs.onPrimary
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(32.dp))
+            .clip(shape)
             .background(cs.surfaceContainerHigh)
             .padding(18.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            HeroRow(media = media, accent = accent)
+            HeroRow(media = media, accent = accent, onAnnounce = onAnnounce, onSearchMusic = onSearchMusic)
             ProgressBlock(
                 media = media,
                 accent = accent,
@@ -119,25 +124,24 @@ fun MediaCardHero(
                 onSkipPrev = onSkipPrev,
                 onSkipNext = onSkipNext,
             )
-            UtilityChipRow(
+            // Volume + playback toggles share one row: they're all "how it plays"
+            // settings, and one group reads calmer than two stacked chip strips.
+            OptionsRow(
+                volume = media.volume,
                 shuffleOn = media.shuffleOn,
                 repeatMode = media.repeatMode,
+                accent = accent,
+                ink = ink,
+                onVolumeChange = onVolumeChange,
                 onToggleShuffle = onToggleShuffle,
                 onCycleRepeat = onCycleRepeat,
-                onOpenQueue = onOpenQueue,
-                onCast = onCast,
-            )
-            VolumePill(
-                volume = media.volume,
-                accent = accent,
-                onVolumeChange = onVolumeChange,
             )
         }
     }
 }
 
 @Composable
-private fun HeroRow(media: HaMedia, accent: Color) {
+private fun HeroRow(media: HaMedia, accent: Color, onAnnounce: () -> Unit, onSearchMusic: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -151,7 +155,7 @@ private fun HeroRow(media: HaMedia, accent: Color) {
                 contentDescription = null,
                 modifier = Modifier
                     .size(84.dp)
-                    .clip(RoundedCornerShape(26.dp))
+                    .clip(MaterialTheme.shapes.medium)
                     .background(cs.surfaceContainerHigh),
             )
         } else {
@@ -160,7 +164,7 @@ private fun HeroRow(media: HaMedia, accent: Color) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Now playing · ${media.friendlyName}".uppercase(),
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 10.sp,
                 letterSpacing = 1.2.sp,
@@ -184,7 +188,7 @@ private fun HeroRow(media: HaMedia, accent: Color) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = media.source,
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 11.sp,
                     color = cs.onSurfaceVariant,
@@ -192,6 +196,56 @@ private fun HeroRow(media: HaMedia, accent: Color) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+        // Quick actions stack in the hero's top-right: announce always; Music
+        // Assistant players also get search (the two pills together match the
+        // 84dp art height, so the row stays balanced either way).
+        Column(
+            modifier = Modifier.align(Alignment.Top),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            HeroPillButton(
+                icon = Icons.Outlined.Campaign,
+                contentDescription = "Announce",
+                accent = accent,
+                onClick = onAnnounce,
+            )
+            if (media.isMusicAssistant) {
+                HeroPillButton(
+                    icon = Icons.Outlined.Search,
+                    contentDescription = "Search music",
+                    accent = accent,
+                    onClick = onSearchMusic,
+                )
+            }
+        }
+    }
+}
+
+// Small pill action in the hero row's top-right (announce / MA search) — kept out of
+// the transport row so it doesn't crowd the playback controls.
+@Composable
+private fun HeroPillButton(
+    icon: ImageVector,
+    contentDescription: String,
+    accent: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Tap(onClick = onClick, modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(PillShape)
+                .background(accent.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = accent,
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
@@ -219,7 +273,7 @@ private fun ProgressBlock(
                 onSeek(it / 100f)
             },
             color = accent,
-            dimColor = Color.White.copy(alpha = 0.10f),
+            dimColor = cs.onSurface.copy(alpha = 0.12f),
             trackHeight = 22.dp,
         )
         Spacer(Modifier.height(4.dp))
@@ -229,14 +283,14 @@ private fun ProgressBlock(
         ) {
             Text(
                 text = media.elapsedLabel,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 11.sp,
                 color = cs.onSurfaceVariant,
             )
             Text(
                 text = media.remainingLabel,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 11.sp,
                 color = cs.onSurfaceVariant,
@@ -309,8 +363,10 @@ private fun PlayPauseSlot(
     modifier: Modifier = Modifier,
     interactionSource: MutableInteractionSource,
 ) {
+    // M3E shape-morph between the app's medium and large tokens: rounder at rest
+    // ("press me"), squarer while playing (the active/selected vocabulary).
     val radius by animateDpAsState(
-        targetValue = if (isPlaying) 22.dp else 30.dp,
+        targetValue = if (isPlaying) 22.dp else 32.dp,
         animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow),
         label = "play_fab_radius",
     )
@@ -339,7 +395,7 @@ private fun PlayPauseSlot(
             Spacer(Modifier.width(10.dp))
             Text(
                 text = if (isPlaying) "Pause" else "Play",
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 14.sp,
                 color = ink,
@@ -366,8 +422,8 @@ private fun SkipSlot(
             modifier = Modifier
                 .height(60.dp)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .background(Color.White.copy(alpha = 0.06f)),
+                .clip(MaterialTheme.shapes.medium)
+                .background(cs.onSurface.copy(alpha = 0.06f)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -380,122 +436,75 @@ private fun SkipSlot(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+// One settle row: the volume pill (the frequently-used control gets the width)
+// with the shuffle/repeat toggles beside it. Active toggles fill with the accent
+// + ink — the same vocabulary as the Play button, so "active" reads consistently.
 @Composable
-private fun UtilityChipRow(
+private fun OptionsRow(
+    volume: Float,
     shuffleOn: Boolean,
     repeatMode: MediaRepeatMode,
+    accent: Color,
+    ink: Color,
+    onVolumeChange: (Float) -> Unit,
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
-    onOpenQueue: () -> Unit,
-    onCast: () -> Unit,
 ) {
-    val repeatActive = repeatMode != MediaRepeatMode.OFF
-    ButtonGroup(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        val shuffleSource = remember { MutableInteractionSource() }
-        val repeatSource = remember { MutableInteractionSource() }
-        val queueSource = remember { MutableInteractionSource() }
-        val castSource = remember { MutableInteractionSource() }
-
-        UtilityChip(
+        Box(modifier = Modifier.weight(1f)) {
+            VolumePill(volume = volume, accent = accent, onVolumeChange = onVolumeChange)
+        }
+        MediaIconToggle(
             icon = Icons.Outlined.Shuffle,
-            label = "Shuffle",
+            contentDescription = "Shuffle",
             active = shuffleOn,
-            accent = Color(0xFFE8B4D6),
-            ink = Color(0xFF2A0F22),
+            accent = accent,
+            ink = ink,
             onClick = onToggleShuffle,
-            modifier = Modifier
-                .weight(1f)
-                .animateWidth(shuffleSource),
-            interactionSource = shuffleSource,
         )
-        UtilityChip(
+        MediaIconToggle(
             icon = if (repeatMode == MediaRepeatMode.ONE) Icons.Outlined.RepeatOne else Icons.Outlined.Repeat,
-            label = "Repeat",
-            active = repeatActive,
-            accent = Color(0xFFE8B4D6),
-            ink = Color(0xFF2A0F22),
+            contentDescription = "Repeat",
+            active = repeatMode != MediaRepeatMode.OFF,
+            accent = accent,
+            ink = ink,
             onClick = onCycleRepeat,
-            modifier = Modifier
-                .weight(1f)
-                .animateWidth(repeatSource),
-            interactionSource = repeatSource,
-        )
-        UtilityChip(
-            icon = Icons.AutoMirrored.Outlined.QueueMusic,
-            label = "Queue",
-            active = false,
-            accent = Color(0xFFE8B4D6),
-            ink = Color(0xFF2A0F22),
-            onClick = onOpenQueue,
-            modifier = Modifier
-                .weight(1f)
-                .animateWidth(queueSource),
-            interactionSource = queueSource,
-        )
-        UtilityChip(
-            icon = Icons.Outlined.Cast,
-            label = "Cast",
-            active = false,
-            accent = Color(0xFFE8B4D6),
-            ink = Color(0xFF2A0F22),
-            onClick = onCast,
-            modifier = Modifier
-                .weight(1f)
-                .animateWidth(castSource),
-            interactionSource = castSource,
         )
     }
 }
 
 @Composable
-private fun UtilityChip(
+private fun MediaIconToggle(
     icon: ImageVector,
-    label: String,
+    contentDescription: String,
     active: Boolean,
     accent: Color,
     ink: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    interactionSource: MutableInteractionSource,
 ) {
     val cs = MaterialTheme.colorScheme
-    // Match the skip buttons: a soft tinted background by default so the
-    // chip is clearly visible against the card. When active (shuffle/repeat
-    // on), fill with the mauve accent + ink text/icon — same vocabulary as
-    // the Play/Pause FAB so "active media control" reads consistently.
-    val containerColor = if (active) accent else Color.White.copy(alpha = 0.06f)
-    val contentColor = if (active) ink else cs.onSurface
-    Tap(
-        onClick = onClick,
-        modifier = modifier,
-        interactionSource = interactionSource,
-    ) {
-        Row(
+    // Spring the fill instead of snapping so the toggle reads as a response.
+    val container by animateColorAsState(
+        targetValue = if (active) accent else cs.onSurface.copy(alpha = 0.06f),
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "media_toggle_$contentDescription",
+    )
+    Tap(onClick = onClick) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(999.dp))
-                .background(containerColor)
-                .padding(vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
+                .size(42.dp)
+                .clip(PillShape)
+                .background(container),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
-                tint = contentColor,
-                modifier = Modifier.size(14.dp),
-            )
-            Spacer(Modifier.width(5.dp))
-            Text(
-                text = label,
-                fontFamily = InterFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.sp,
-                color = contentColor,
+                contentDescription = contentDescription,
+                tint = if (active) ink else cs.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
             )
         }
     }
@@ -519,9 +528,9 @@ private fun VolumePill(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(999.dp))
-            .background(Color.White.copy(alpha = 0.04f))
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .clip(PillShape)
+            .background(cs.onSurface.copy(alpha = 0.05f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -540,13 +549,13 @@ private fun VolumePill(
                     onVolumeChange(it / 100f)
                 },
                 color = accent,
-                dimColor = Color.White.copy(alpha = 0.10f),
+                dimColor = cs.onSurface.copy(alpha = 0.12f),
                 trackHeight = 14.dp,
             )
         }
         Text(
             text = "$displayed%",
-            fontFamily = InterFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Bold,
             fontSize = 11.sp,
             color = cs.onSurface,

@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uc.homehealth.data.HaEntityValue
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
 import com.uc.homehealth.ui.theme.MontserratFamily
 import dev.chrisbanes.haze.HazeState
 import kotlin.math.PI
@@ -184,7 +183,7 @@ fun SensorWidgetTile(
             ) {
                 Text(
                     text = name,
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = cs.onSurface,

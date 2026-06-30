@@ -1,44 +1,53 @@
 package com.uc.homehealth.data
 
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * In-memory log of actions the user performed via this app while connected to HA.
- * Lives for the process lifetime — cleared on cold start.
+ * Log of actions the user performed via this app while connected to HA.
+ * Persisted to Room ([ActivityDao]) so the feed survives leaving the app / process death
+ * (it used to live only for the process lifetime and was cleared on cold start).
+ *
+ * Only app-initiated actions are recorded here — HA's own state changes are not logged.
  */
 @Singleton
-class ActivityLog @Inject constructor() {
+class ActivityLog @Inject constructor(
+    private val dao: ActivityDao,
+) {
 
-    private val nextId = AtomicInteger(1)
-    private val _events = MutableStateFlow<List<HaNotification>>(emptyList())
-    val events: StateFlow<List<HaNotification>> = _events.asStateFlow()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    val events: Flow<List<HaNotification>> =
+        dao.observeRecent(MAX_EVENTS).map { rows -> rows.map { it.toNotification() } }
 
     fun record(kind: String, title: String, body: String) {
-        val event = HaNotification(
-            id = nextId.getAndIncrement(),
-            kind = kind,
-            title = title,
-            body = body,
-            timestamp = System.currentTimeMillis(),
-        )
-        _events.update { list -> (listOf(event) + list).take(MAX_EVENTS) }
-    }
-
-    fun clear() {
-        _events.value = emptyList()
-    }
-
-    private fun MutableStateFlow<List<HaNotification>>.update(transform: (List<HaNotification>) -> List<HaNotification>) {
-        while (true) {
-            val current = value
-            val next = transform(current)
-            if (compareAndSet(current, next)) return
+        scope.launch {
+            dao.insert(
+                ActivityEntity(
+                    kind = kind,
+                    title = title,
+                    body = body,
+                    timestamp = System.currentTimeMillis(),
+                )
+            )
+            dao.trim(MAX_EVENTS)
         }
+    }
+
+    /** Delete one recorded event by id (swipe-to-delete). Suspends until Room completes. */
+    suspend fun delete(id: Long) {
+        dao.delete(id)
+    }
+
+    /** Wipe the whole on-device feed. Suspends until Room completes. */
+    suspend fun clear() {
+        dao.clear()
     }
 
     companion object {

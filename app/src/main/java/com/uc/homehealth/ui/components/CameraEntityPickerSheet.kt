@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -31,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -40,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uc.homehealth.data.HaEntitySummary
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
 import com.uc.homehealth.ui.theme.MontserratFamily
 import dev.chrisbanes.haze.HazeState
 
@@ -59,7 +61,11 @@ fun CameraEntityPickerSheet(
     LaunchedEffect(visible) { if (!visible) query = "" }
 
     val pool = remember(allEntities, existingIds) {
-        allEntities.filter { it.domain == "camera" && it.entityId !in existingIds }
+        allEntities
+            .filter { it.domain == "camera" && it.entityId !in existingIds }
+            // Live-capable cameras first so the snapshot-only entities (which can't
+            // stream) don't get picked by mistake.
+            .sortedWith(compareByDescending<HaEntitySummary> { it.supportsStream }.thenBy { it.friendlyName.lowercase() })
     }
     val filtered = remember(pool, query) {
         val q = query.trim().lowercase()
@@ -84,7 +90,7 @@ fun CameraEntityPickerSheet(
             )
             Text(
                 text = "Choose a Home Assistant camera entity",
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,
@@ -109,7 +115,7 @@ fun CameraEntityPickerSheet(
             ) {
                 Text(
                     text = "No camera entities found.",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontSize = 13.sp,
                     color = cs.onSurfaceVariant,
                 )
@@ -140,7 +146,7 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit) {
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        textStyle = TextStyle(fontFamily = InterFamily, fontSize = 14.sp, color = cs.onSurface),
+        textStyle = TextStyle(fontFamily = MontserratFamily, fontSize = 14.sp, color = cs.onSurface),
         cursorBrush = SolidColor(cs.primary),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(),
@@ -164,7 +170,7 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit) {
                     if (value.isEmpty()) {
                         Text(
                             text = "Search by name or entity id",
-                            fontFamily = InterFamily,
+                            fontFamily = MontserratFamily,
                             fontSize = 14.sp,
                             color = cs.onSurfaceVariant.copy(alpha = 0.5f),
                         )
@@ -184,6 +190,41 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit) {
             }
         },
     )
+}
+
+// LIVE pill for stream-capable cameras; muted label otherwise. Mirrors HA's own
+// distinction between full camera entities and snapshot-only proxies.
+@Composable
+private fun CapabilityTag(supportsStream: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    if (supportsStream) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .background(cs.surfaceVariant, RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        ) {
+            Box(modifier = Modifier
+                .size(6.dp)
+                .background(Color(0xFF34C759), CircleShape))
+            Spacer(Modifier.width(5.dp))
+            Text(
+                text = "LIVE",
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp,
+                color = cs.onSurface,
+            )
+        }
+    } else {
+        Text(
+            text = "Snapshot only",
+            fontFamily = MontserratFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 11.sp,
+            color = cs.onSurfaceVariant.copy(alpha = 0.7f),
+        )
+    }
 }
 
 @Composable
@@ -221,7 +262,7 @@ private fun CameraEntityRow(
             ) {
                 Text(
                     text = entity.friendlyName,
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = cs.onSurface,
@@ -235,13 +276,9 @@ private fun CameraEntityRow(
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
-            Text(
-                text = entity.state,
-                fontFamily = InterFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 12.sp,
-                color = cs.onSurfaceVariant,
-            )
+            // Capability tag: green-ish LIVE for streamable cameras, muted
+            // "Snapshot only" for the rest so the choice is obvious.
+            CapabilityTag(supportsStream = entity.supportsStream)
         }
     }
 }

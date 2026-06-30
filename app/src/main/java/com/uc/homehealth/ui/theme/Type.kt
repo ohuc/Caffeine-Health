@@ -11,13 +11,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.uc.homehealth.R
 
-val InterFamily = FontFamily(
-    Font(R.font.inter, weight = FontWeight.Normal),
-    Font(R.font.inter, weight = FontWeight.Medium),
-    Font(R.font.inter, weight = FontWeight.SemiBold),
-    Font(R.font.inter_italic, weight = FontWeight.Normal, style = FontStyle.Italic),
-)
-
 val InstrumentSerifFamily = FontFamily(
     Font(R.font.instrument_serif_regular, weight = FontWeight.Normal),
     Font(R.font.instrument_serif_italic, weight = FontWeight.Normal, style = FontStyle.Italic),
@@ -111,21 +104,21 @@ internal val AppTypography = Typography(
         letterSpacing = 0.1.sp,
     ),
     bodyLarge = TextStyle(
-        fontFamily = InterFamily,
+        fontFamily = MontserratFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
         letterSpacing = 0.5.sp,
     ),
     bodyMedium = TextStyle(
-        fontFamily = InterFamily,
+        fontFamily = MontserratFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         letterSpacing = 0.25.sp,
     ),
     bodySmall = TextStyle(
-        fontFamily = InterFamily,
+        fontFamily = MontserratFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 16.sp,

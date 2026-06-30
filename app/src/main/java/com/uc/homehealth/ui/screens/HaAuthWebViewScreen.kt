@@ -1,7 +1,6 @@
 package com.uc.homehealth.ui.screens
 
 import android.annotation.SuppressLint
-import android.webkit.WebSettings
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -53,7 +52,10 @@ fun HaAuthWebViewScreen(
                     settings.domStorageEnabled = true
                     @Suppress("DEPRECATION")
                     settings.databaseEnabled = true
-                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    // Mixed content stays at the platform default (NEVER_ALLOW): this view
+                    // hosts the HA login page, and an https login page must not be allowed
+                    // to load http subresources. Plain-http HA URLs are unaffected (the
+                    // mixed-content policy only applies to subresources of https pages).
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(
                             view: WebView,

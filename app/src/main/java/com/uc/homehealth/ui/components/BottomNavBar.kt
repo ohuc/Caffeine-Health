@@ -12,10 +12,16 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.outlined.ElectricBolt
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.MonitorHeart
+import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Timeline
 import androidx.compose.material3.ButtonDefaults
@@ -55,11 +61,20 @@ data class NavDestination(
     val selectedIcon: ImageVector,
 )
 
-val homeNavDestinations = listOf(
-    NavDestination("dashboard", "Home",     Icons.Outlined.Home,     Icons.Filled.Home),
-    NavDestination("activity",  "Activity", Icons.Outlined.Timeline, Icons.Filled.Timeline),
-    NavDestination("settings",  "Settings", Icons.Outlined.Settings, Icons.Filled.Settings),
+// Catalog of every tab the bar can host, in default order. The user's actual bar is an
+// ordered subset of these keys (UserPreferences.navTabKeys); Settings is mandatory there.
+val navDestinationCatalog = listOf(
+    NavDestination("dashboard", "Home",     Icons.Outlined.Home,         Icons.Filled.Home),
+    NavDestination("activity",  "Activity", Icons.Outlined.Timeline,     Icons.Filled.Timeline),
+    NavDestination("energy",    "Energy",   Icons.Outlined.ElectricBolt, Icons.Filled.ElectricBolt),
+    NavDestination("pulse",     "Pulse",    Icons.Outlined.MonitorHeart, Icons.Filled.MonitorHeart),
+    NavDestination("music",     "Music",    Icons.Outlined.MusicNote,    Icons.Filled.MusicNote),
+    NavDestination("settings",  "Settings", Icons.Outlined.Settings,     Icons.Filled.Settings),
 )
+
+/** Resolve the user's ordered tab keys to destinations, dropping anything unknown. */
+fun navDestinationsFor(keys: List<String>): List<NavDestination> =
+    keys.mapNotNull { key -> navDestinationCatalog.find { it.route == key } }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -67,12 +82,18 @@ fun BottomNavBar(
     currentRoute: String,
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier,
+    tabs: List<NavDestination> = navDestinationCatalog,
+    // False renders the bar inline (no window insets / bottom margin) — used by the
+    // nav-bar editor's preview card.
+    floating: Boolean = true,
 ) {
     val cs = MaterialTheme.colorScheme
     val haptic = rememberAppHaptics()
 
-    val buttonBounds = remember { mutableStateMapOf<Int, Rect>() }
-    val currentIndex = homeNavDestinations.indexOfFirst { it.route == currentRoute }
+    val destinations = tabs
+    // Keyed on the tab set: stale bounds from a removed/reordered set would misplace the pill.
+    val buttonBounds = remember(tabs) { mutableStateMapOf<Int, Rect>() }
+    val currentIndex = destinations.indexOfFirst { it.route == currentRoute }
     val targetRect = buttonBounds[currentIndex]
     val button0Rect = buttonBounds[0]
     val pillRelativeX = (targetRect?.left ?: 0f) - (button0Rect?.left ?: 0f)
@@ -97,16 +118,16 @@ fun BottomNavBar(
 
     HorizontalFloatingToolbar(
         expanded = true,
-        modifier = modifier
-            .navigationBarsPadding()
-            .padding(bottom = 16.dp),
+        modifier = modifier.then(
+            if (floating) Modifier.navigationBarsPadding().padding(bottom = 16.dp) else Modifier
+        ),
         colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(
             toolbarContainerColor = cs.primaryContainer,
             toolbarContentColor = cs.onPrimaryContainer,
         ),
     ) {
         CompositionLocalProvider(LocalRippleConfiguration provides null) {
-            homeNavDestinations.forEachIndexed { index, dest ->
+            destinations.forEachIndexed { index, dest ->
                 val isSelected = currentRoute == dest.route
 
                 ToggleButton(

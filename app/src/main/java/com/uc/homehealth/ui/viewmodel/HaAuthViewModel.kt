@@ -8,6 +8,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -31,7 +32,17 @@ class HaAuthViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val tokens = authManager.exchangeCode(haUrl, code, codeVerifier)
-                authPreferences.saveAuth(haUrl, tokens.accessToken, tokens.refreshToken, tokens.expiresIn)
+                // Preserve the user's local-URL/SSID routing and go2rtc config — the
+                // single-URL saveAuth overload would wipe them on every OAuth re-login.
+                val existing = authPreferences.authState.first()
+                authPreferences.saveAuth(
+                    localUrl = existing.localUrl,
+                    remoteUrl = haUrl.trimEnd('/'),
+                    homeSsids = existing.homeSsids,
+                    accessToken = tokens.accessToken,
+                    refreshToken = tokens.refreshToken,
+                    expiresIn = tokens.expiresIn,
+                )
                 _authComplete.value = true
             } catch (e: Exception) {
                 _error.value = "Connection failed: ${e.message}"

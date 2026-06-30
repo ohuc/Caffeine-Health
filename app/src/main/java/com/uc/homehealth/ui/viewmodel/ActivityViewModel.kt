@@ -35,6 +35,11 @@ class ActivityViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing
 
+    /** Swipe-to-delete: remove one event from the on-device feed. */
+    fun delete(id: Long) {
+        viewModelScope.launch { repo.deleteNotification(id) }
+    }
+
     fun refresh() {
         if (_isRefreshing.value) return
         _isRefreshing.value = true

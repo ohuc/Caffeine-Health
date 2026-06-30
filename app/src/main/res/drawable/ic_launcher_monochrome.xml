@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Monochrome layer for Android 13+ themed icons. Same Pulse House geometry as the
+    foreground, but as a single opaque tone — the system extracts the alpha and
+    applies the user's themed tint, so the house + pulse read as one-color line-art.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M54,33 L73,50 L73,75 L35,75 L35,50 Z"
+        android:strokeColor="#1A1A1A"
+        android:strokeWidth="6.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M41,62 L51,62 L54,53 L57,72 L60,62 L67,62"
+        android:strokeColor="#1A1A1A"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

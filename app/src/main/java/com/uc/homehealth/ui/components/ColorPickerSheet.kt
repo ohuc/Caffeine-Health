@@ -67,7 +67,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uc.homehealth.data.HaLight
-import com.uc.homehealth.ui.theme.InterFamily
 import com.uc.homehealth.ui.theme.MontserratFamily
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
@@ -85,7 +84,7 @@ private const val DefaultMaxKelvin = 6500
 
 // Full-screen overlay sheet for color / colour-temperature selection. Slides up
 // over the room sheet; tapping the scrim or dragging the handle dismisses.
-@OptIn(ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalHazeMaterialsApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ColorPickerSheetOverlay(
     light: HaLight?,
@@ -97,11 +96,15 @@ fun ColorPickerSheetOverlay(
     val visible = light != null
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
 
+    // Back gesture closes the picker (predictively) instead of relying on the room
+    // sheet's pop chain — this sheet opens last, so it must own the gesture.
+    val backProgress = rememberSheetPredictiveBack(visible = visible, onDismiss = onDismiss)
+
     Box(modifier = Modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(tween(280, easing = EaseOut)),
-            exit = fadeOut(tween(380, easing = EaseIn)),
+            enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+            exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
             modifier = Modifier.matchParentSize(),
         ) {
             Box(
@@ -124,11 +127,11 @@ fun ColorPickerSheetOverlay(
             visible = visible,
             enter = slideInVertically(
                 initialOffsetY = { it },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
             ),
             exit = slideOutVertically(
                 targetOffsetY = { it },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
             ),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
@@ -138,6 +141,7 @@ fun ColorPickerSheetOverlay(
 
             Column(
                 modifier = Modifier
+                    .predictiveSheetTransform { backProgress.value }
                     .fillMaxWidth()
                     .heightIn(max = screenHeight * 0.75f)
                     .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
@@ -225,7 +229,7 @@ private fun ColorPickerBody(
                     ) {
                         Text(
                             label,
-                            fontFamily = InterFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp,
                         )

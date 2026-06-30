@@ -1,6 +1,5 @@
 package com.uc.homehealth.ui.components
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AcUnit
 import androidx.compose.material.icons.outlined.Air
@@ -25,8 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -34,23 +30,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uc.homehealth.data.HaClimate
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
 import com.uc.homehealth.ui.theme.MontserratFamily
 import com.uc.homehealth.ui.theme.PillShape
+import com.uc.homehealth.ui.theme.customColors
 
-// Mode → accent palette. Falls back to neutral gray for unknown/idle/off.
+// Mode → accent palette. Falls back to neutral for unknown/idle/off. Accents come from
+// the theme (CustomColors / onSurfaceVariant) so badge text and the big target temp stay
+// legible in light theme too.
 private data class ClimateAccent(val color: Color, val label: String, val icon: ImageVector)
 
+@Composable
 private fun accentFor(climate: HaClimate): ClimateAccent {
+    val custom = MaterialTheme.customColors
+    val neutral = MaterialTheme.colorScheme.onSurfaceVariant
     // Prefer hvac_action (current behavior) over mode (target intent) for the badge.
     return when (climate.action ?: climate.mode) {
-        "heating", "heat" -> ClimateAccent(Color(0xFFF2725C), "HEATING", Icons.Outlined.LocalFireDepartment)
-        "cooling", "cool" -> ClimateAccent(Color(0xFF9CB6E8), "COOLING", Icons.Outlined.AcUnit)
-        "drying", "dry" -> ClimateAccent(Color(0xFFB8A8E8), "DRYING", Icons.Outlined.WaterDrop)
-        "fan", "fan_only" -> ClimateAccent(Color(0xFF7DD3D8), "FAN", Icons.Outlined.Air)
-        "off" -> ClimateAccent(Color(0xFF8A8A90), "OFF", Icons.Outlined.PowerSettingsNew)
-        "idle" -> ClimateAccent(Color(0xFF8A8A90), "IDLE", Icons.Outlined.LocalFireDepartment)
-        else -> ClimateAccent(Color(0xFF8A8A90), (climate.mode).uppercase(), Icons.Outlined.LocalFireDepartment)
+        "heating", "heat" -> ClimateAccent(custom.coral, "HEATING", Icons.Outlined.LocalFireDepartment)
+        "cooling", "cool" -> ClimateAccent(custom.sky, "COOLING", Icons.Outlined.AcUnit)
+        "drying", "dry" -> ClimateAccent(custom.lavender, "DRYING", Icons.Outlined.WaterDrop)
+        "fan", "fan_only" -> ClimateAccent(custom.cyan, "FAN", Icons.Outlined.Air)
+        "off" -> ClimateAccent(neutral, "OFF", Icons.Outlined.PowerSettingsNew)
+        "idle" -> ClimateAccent(neutral, "IDLE", Icons.Outlined.LocalFireDepartment)
+        else -> ClimateAccent(neutral, (climate.mode).uppercase(), Icons.Outlined.LocalFireDepartment)
     }
 }
 
@@ -68,21 +69,10 @@ fun ClimateCard(
         onClick = onTap,
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(MaterialTheme.shapes.medium)
             .background(cs.surfaceContainerHigh),
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
-            // Soft accent orb — top-right radial glow approximating the JSX blur 30 / opacity 18% disc.
-            Canvas(modifier = Modifier.matchParentSize()) {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(accent.color.copy(alpha = 0.34f), Color.Transparent),
-                        center = Offset(size.width + 30f, -30f),
-                        radius = 220f,
-                    ),
-                )
-            }
-
             Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
                 // Header row: icon well + action pill
                 Row(
@@ -92,7 +82,7 @@ fun ClimateCard(
                     Box(
                         modifier = Modifier
                             .size(40.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(MaterialTheme.shapes.small)
                             .background(accentSoft),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -113,7 +103,7 @@ fun ClimateCard(
                     ) {
                         Text(
                             text = accent.label,
-                            fontFamily = InterFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
                             color = accent.color,
@@ -158,7 +148,7 @@ private fun TempBlock(
     Column {
         Text(
             text = label,
-            fontFamily = InterFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Bold,
             fontSize = 10.sp,
             letterSpacing = 0.6.sp,

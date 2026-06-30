@@ -37,7 +37,11 @@ object NetworkModule {
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
-        .pingInterval(30, TimeUnit.SECONDS)
+        // 15s WS ping (was 30s). Remote HA usually sits behind a reverse proxy /
+        // Cloudflare whose idle-connection timeout can be short; a tighter ping keeps
+        // the socket warm and detects a dead link faster so our reconnect loop fires
+        // sooner. OkHttp also treats a missed pong within this window as a failure.
+        .pingInterval(15, TimeUnit.SECONDS)
         .retryOnConnectionFailure(false) // we have our own reconnect loop in HaWebSocketClient
         .build()
 

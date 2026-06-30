@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uc.homehealth.data.HaRoom
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
 import com.uc.homehealth.ui.theme.MontserratFamily
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
@@ -82,7 +81,7 @@ fun RoomPickerSheet(
             )
             Text(
                 text = "Rooms you have hidden from the dashboard",
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,
@@ -111,7 +110,7 @@ fun RoomPickerSheet(
             ) {
                 Text(
                     text = "All rooms are currently visible on your dashboard.",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontSize = 13.sp,
                     color = cs.onSurfaceVariant,
                 )
@@ -142,7 +141,7 @@ private fun RoomSearchField(value: String, onValueChange: (String) -> Unit, onCl
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        textStyle = TextStyle(fontFamily = InterFamily, fontSize = 14.sp, color = cs.onSurface),
+        textStyle = TextStyle(fontFamily = MontserratFamily, fontSize = 14.sp, color = cs.onSurface),
         cursorBrush = SolidColor(cs.primary),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(),
@@ -157,7 +156,7 @@ private fun RoomSearchField(value: String, onValueChange: (String) -> Unit, onCl
                 Icon(Icons.Outlined.Search, contentDescription = null, tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                 Box(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
                     if (value.isEmpty()) {
-                        Text("Search rooms", fontFamily = InterFamily, fontSize = 14.sp, color = cs.onSurfaceVariant.copy(alpha = 0.5f))
+                        Text("Search rooms", fontFamily = MontserratFamily, fontSize = 14.sp, color = cs.onSurfaceVariant.copy(alpha = 0.5f))
                     }
                     inner()
                 }
@@ -207,7 +206,7 @@ private fun RoomPickerRow(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = room.name,
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = cs.onSurface,
@@ -222,7 +221,7 @@ private fun RoomPickerRow(
             }
             Text(
                 text = "+ Add",
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp,
                 color = cs.primary,

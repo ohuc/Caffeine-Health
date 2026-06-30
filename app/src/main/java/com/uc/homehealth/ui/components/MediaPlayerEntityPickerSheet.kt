@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uc.homehealth.data.HaEntitySummary
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
 import com.uc.homehealth.ui.theme.MontserratFamily
 import dev.chrisbanes.haze.HazeState
 
@@ -84,7 +83,7 @@ fun MediaPlayerEntityPickerSheet(
             )
             Text(
                 text = "Choose a Home Assistant media_player entity",
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,
@@ -109,7 +108,7 @@ fun MediaPlayerEntityPickerSheet(
             ) {
                 Text(
                     text = "No media_player entities found.",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontSize = 13.sp,
                     color = cs.onSurfaceVariant,
                 )
@@ -140,7 +139,7 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit) {
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        textStyle = TextStyle(fontFamily = InterFamily, fontSize = 14.sp, color = cs.onSurface),
+        textStyle = TextStyle(fontFamily = MontserratFamily, fontSize = 14.sp, color = cs.onSurface),
         cursorBrush = SolidColor(cs.primary),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(),
@@ -164,7 +163,7 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit) {
                     if (value.isEmpty()) {
                         Text(
                             text = "Search by name or entity id",
-                            fontFamily = InterFamily,
+                            fontFamily = MontserratFamily,
                             fontSize = 14.sp,
                             color = cs.onSurfaceVariant.copy(alpha = 0.5f),
                         )
@@ -221,7 +220,7 @@ private fun MediaPlayerEntityRow(
             ) {
                 Text(
                     text = entity.friendlyName,
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = cs.onSurface,
@@ -237,7 +236,7 @@ private fun MediaPlayerEntityRow(
             }
             Text(
                 text = entity.state,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,

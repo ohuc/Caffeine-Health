@@ -1,17 +1,19 @@
 package com.uc.homehealth.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
@@ -19,9 +21,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,7 +37,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,9 +49,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.uc.homehealth.data.HaNotification
 import com.uc.homehealth.ui.components.haIconFor
+import com.uc.homehealth.ui.components.rememberAppHaptics
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
+import com.uc.homehealth.ui.theme.MontserratFamily
 import com.uc.homehealth.ui.theme.Spacing
+import com.uc.homehealth.ui.theme.customColors
 import com.uc.homehealth.ui.viewmodel.ActivityUiState
 import com.uc.homehealth.ui.viewmodel.ActivityViewModel
 import java.time.Instant
@@ -59,21 +72,25 @@ private fun matchesFilter(kind: String, filter: String): Boolean = when (filter)
     else -> true
 }
 
-// kind → (bg alpha color, icon tint color, icon key)
-private fun kindStyle(kind: String): Triple<Color, Color, String> = when (kind) {
-    "light"   -> Triple(Color(0x23FFD9A8), Color(0xFFFFD9A8), "bulb")
-    "scene"   -> Triple(Color(0x23B8A8E8), Color(0xFFB8A8E8), "sparkle")
-    "climate" -> Triple(Color(0x23F2725C), Color(0xFFF2725C), "thermo")
-    "motion"  -> Triple(Color(0x23E8B4D6), Color(0xFFE8B4D6), "pulse")
-    "door"    -> Triple(Color(0x239CB6E8), Color(0xFF9CB6E8), "door")
-    "energy"  -> Triple(Color(0x23E8C99B), Color(0xFFE8C99B), "energy")
-    "auto"    -> Triple(Color(0x23B8A8E8), Color(0xFFB8A8E8), "sparkle")
-    "update"  -> Triple(Color(0x239DD8A8), Color(0xFF9DD8A8), "settings")
-    "media"   -> Triple(Color(0x237DD3D8), Color(0xFF7DD3D8), "speaker")
-    else      -> Triple(Color(0x23E8B4D6), Color(0xFFE8B4D6), "pulse")
+// kind → (accent, icon key). Accents come from the theme (CustomColors / primary) so the
+// icon tint and its wash stay legible in both light and dark themes.
+@Composable
+private fun kindStyle(kind: String): Pair<Color, String> {
+    val custom = MaterialTheme.customColors
+    return when (kind) {
+        "light"   -> custom.sand to "bulb"
+        "scene"   -> custom.lavender to "sparkle"
+        "climate" -> custom.coral to "thermo"
+        "motion"  -> MaterialTheme.colorScheme.primary to "pulse"
+        "door"    -> custom.sky to "door"
+        "energy"  -> custom.sand to "energy"
+        "auto"    -> custom.lavender to "sparkle"
+        "update"  -> custom.mint to "settings"
+        "media"   -> custom.cyan to "speaker"
+        else      -> MaterialTheme.colorScheme.primary to "pulse"
+    }
 }
 
-private val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
 private val dateFormatter = DateTimeFormatter.ofPattern("MMM d")
 private val zone: ZoneId = ZoneId.systemDefault()
 
@@ -88,9 +105,6 @@ private fun relativeTime(ts: Long, now: Long): String {
         else -> Instant.ofEpochMilli(ts).atZone(zone).format(dateFormatter)
     }
 }
-
-private fun clockTime(ts: Long): String =
-    Instant.ofEpochMilli(ts).atZone(zone).format(timeFormatter)
 
 private fun bucketFor(ts: Long, now: Long): String {
     if (now - ts < 5 * 60_000L) return "Just now"
@@ -116,17 +130,20 @@ fun ActivityScreen(
         uiState = uiState,
         isRefreshing = isRefreshing,
         onRefresh = viewModel::refresh,
+        onDelete = viewModel::delete,
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ActivityScreenContent(
     uiState: ActivityUiState,
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
+    onDelete: (Long) -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     var activeFilter by remember { mutableStateOf("All") }
     val now = remember(uiState.notifications) { System.currentTimeMillis() }
 
@@ -144,16 +161,24 @@ internal fun ActivityScreenContent(
         else -> "$last24h ${if (last24h == 1) "event" else "events"} in the last 24 hours"
     }
 
+    val pullState = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
+        state = pullState,
         modifier = Modifier.fillMaxWidth(),
+        indicator = {
+            PullToRefreshDefaults.LoadingIndicator(
+                state = pullState,
+                isRefreshing = isRefreshing,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
     ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(bottom = 130.dp),
+            .statusBarsPadding(),
     ) {
         // Header
         Column(modifier = Modifier.padding(start = Spacing.xl, end = Spacing.xl, top = 16.dp, bottom = 14.dp)) {
@@ -166,7 +191,7 @@ internal fun ActivityScreenContent(
             )
             Text(
                 text = subtitle,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontSize = 13.sp,
                 color = cs.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -185,7 +210,12 @@ internal fun ActivityScreenContent(
             filters.forEachIndexed { index, filter ->
                 ToggleButton(
                     checked = filter == activeFilter,
-                    onCheckedChange = { if (it) activeFilter = filter },
+                    onCheckedChange = { checked ->
+                        if (checked && filter != activeFilter) {
+                            haptics.toggle(true)
+                            activeFilter = filter
+                        }
+                    },
                     modifier = Modifier.weight(1f),
                     shapes = when (index) {
                         0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
@@ -195,7 +225,7 @@ internal fun ActivityScreenContent(
                 ) {
                     Text(
                         text = filter,
-                        fontFamily = InterFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 12.sp,
                     )
@@ -215,12 +245,26 @@ internal fun ActivityScreenContent(
         }
 
         LazyColumn(
-            contentPadding = PaddingValues(horizontal = Spacing.ml),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(
+                start = Spacing.ml,
+                end = Spacing.ml,
+                bottom = 130.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             groups.forEach { (label, items) ->
-                item(key = "h-$label") { GroupHeader(label) }
-                items(items, key = { it.id }) { n -> NotificationRow(n, now) }
+                item(key = "h-$label") { GroupHeader(label, Modifier.animateItem()) }
+                itemsIndexed(items, key = { _, n -> n.id }) { index, n ->
+                    SwipeableNotificationRow(
+                        n = n,
+                        now = now,
+                        shape = notificationRowShape(index, items.size),
+                        onDelete = onDelete,
+                        // Spring the rows below up to close the gap when one is removed —
+                        // the same list-removal motion Gmail / Google Messages use.
+                        modifier = Modifier.animateItem(),
+                    )
+                }
             }
         }
     }
@@ -228,27 +272,114 @@ internal fun ActivityScreenContent(
 }
 
 @Composable
-private fun GroupHeader(label: String) {
+private fun GroupHeader(label: String, modifier: Modifier = Modifier) {
     Text(
         text = label.uppercase(),
-        fontFamily = InterFamily,
+        fontFamily = MontserratFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 11.sp,
         letterSpacing = 0.6.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+        modifier = modifier.padding(vertical = 8.dp, horizontal = 6.dp),
     )
 }
 
+// Material 3 Expressive grouped-list shape: rows in the same time bucket read as a
+// single container — large corners on the group's outer edges, small corners where
+// rows meet (see m3.material.io/components/lists, expressive grouped lists).
+private val GroupCornerLarge = 22.dp
+private val GroupCornerSmall = 6.dp
+
+private fun notificationRowShape(index: Int, count: Int): Shape = when {
+    count == 1 -> RoundedCornerShape(GroupCornerLarge)
+    index == 0 -> RoundedCornerShape(
+        topStart = GroupCornerLarge, topEnd = GroupCornerLarge,
+        bottomStart = GroupCornerSmall, bottomEnd = GroupCornerSmall,
+    )
+    index == count - 1 -> RoundedCornerShape(
+        topStart = GroupCornerSmall, topEnd = GroupCornerSmall,
+        bottomStart = GroupCornerLarge, bottomEnd = GroupCornerLarge,
+    )
+    else -> RoundedCornerShape(GroupCornerSmall)
+}
+
+// Slide-to-remove (Material 3 SwipeToDismissBox). Either direction deletes — swipe the
+// card off whichever way feels natural — and the library's default 56.dp positional
+// threshold + fling physics mean a moderate swipe-and-release auto-completes the dismiss
+// (the same feel as Gmail / Google Messages). The reveal behind the row is a flat
+// errorContainer panel with the trash icon pinned to the side you're swiping toward,
+// clipped to the row's own grouped-list shape so the rounded corners stay consistent.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NotificationRow(n: HaNotification, now: Long) {
+private fun SwipeableNotificationRow(
+    n: HaNotification,
+    now: Long,
+    shape: Shape,
+    onDelete: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val haptics = rememberAppHaptics()
+    val state = rememberSwipeToDismissBoxState()
+    SwipeToDismissBox(
+        state = state,
+        modifier = modifier,
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true,
+        onDismiss = { direction ->
+            if (direction != SwipeToDismissBoxValue.Settled) {
+                haptics.confirm()
+                onDelete(n.id)
+            }
+        },
+        backgroundContent = { SwipeDeleteBackground(state, shape) },
+    ) {
+        NotificationRow(n, now, shape)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeDeleteBackground(state: SwipeToDismissBoxState, shape: Shape) {
     val cs = MaterialTheme.colorScheme
-    val (bgColor, iconColor, iconKey) = kindStyle(n.kind)
+    val direction = state.dismissDirection
+    val alignment = if (direction == SwipeToDismissBoxValue.StartToEnd) {
+        Alignment.CenterStart
+    } else {
+        Alignment.CenterEnd
+    }
+    // Icon grows in as the drag picks up so the action reads before release.
+    val iconScale by animateFloatAsState(
+        targetValue = if (direction == SwipeToDismissBoxValue.Settled) 0.6f else 1f,
+        label = "swipeTrashScale",
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(shape)
+            .background(cs.errorContainer)
+            .padding(horizontal = 24.dp),
+        contentAlignment = alignment,
+    ) {
+        Icon(
+            imageVector = haIconFor("trash"),
+            contentDescription = "Delete",
+            tint = cs.onErrorContainer,
+            modifier = Modifier
+                .size(22.dp)
+                .graphicsLayer { scaleX = iconScale; scaleY = iconScale },
+        )
+    }
+}
+
+@Composable
+private fun NotificationRow(n: HaNotification, now: Long, shape: Shape) {
+    val cs = MaterialTheme.colorScheme
+    val (accent, iconKey) = kindStyle(n.kind)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(cs.surfaceContainerHigh, RoundedCornerShape(20.dp))
+            .background(cs.surfaceContainerHigh, shape)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -256,20 +387,20 @@ private fun NotificationRow(n: HaNotification, now: Long) {
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(bgColor, RoundedCornerShape(14.dp)),
+                .background(accent.copy(alpha = 0.14f), MaterialTheme.shapes.small),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = haIconFor(iconKey),
                 contentDescription = n.kind,
-                tint = iconColor,
+                tint = accent,
                 modifier = Modifier.size(18.dp),
             )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = n.title,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 letterSpacing = (-0.1).sp,
@@ -277,28 +408,20 @@ private fun NotificationRow(n: HaNotification, now: Long) {
             )
             Text(
                 text = n.body,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = relativeTime(n.timestamp, now),
-                fontFamily = InterFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 11.sp,
-                color = cs.onSurfaceVariant,
-            )
-            Text(
-                text = clockTime(n.timestamp),
-                fontFamily = InterFamily,
-                fontSize = 10.sp,
-                color = cs.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
+        // One time representation per row — the group header already carries the bucket.
+        Text(
+            text = relativeTime(n.timestamp, now),
+            fontFamily = MontserratFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 11.sp,
+            color = cs.onSurfaceVariant,
+        )
     }
 }
 
@@ -314,7 +437,7 @@ private fun EmptyActivity(title: String, subtitle: String) {
         Box(
             modifier = Modifier
                 .size(56.dp)
-                .background(cs.surfaceContainerHigh, RoundedCornerShape(20.dp)),
+                .background(cs.surfaceContainerHigh, MaterialTheme.shapes.medium),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -326,7 +449,7 @@ private fun EmptyActivity(title: String, subtitle: String) {
         }
         Text(
             text = title,
-            fontFamily = InterFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 15.sp,
             color = cs.onSurface,
@@ -334,7 +457,7 @@ private fun EmptyActivity(title: String, subtitle: String) {
         )
         Text(
             text = subtitle,
-            fontFamily = InterFamily,
+            fontFamily = MontserratFamily,
             fontSize = 12.sp,
             color = cs.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),

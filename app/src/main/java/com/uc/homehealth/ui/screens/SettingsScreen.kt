@@ -3,6 +3,9 @@ package com.uc.homehealth.ui.screens
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -20,12 +23,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Campaign
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.SpaceDashboard
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -33,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,17 +45,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -61,26 +62,34 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import com.uc.homehealth.R
 import com.uc.homehealth.data.WsConnectionStatus
+import com.uc.homehealth.ui.components.OpenInHomeAssistantButton
 import com.uc.homehealth.ui.components.SettingsPageScaffold
 import com.uc.homehealth.ui.components.haIconFor
+import com.uc.homehealth.ui.components.launchHomeAssistant
+import com.uc.homehealth.ui.components.rememberAppHaptics
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
+import com.uc.homehealth.ui.theme.MontserratFamily
 import com.uc.homehealth.ui.theme.Spacing
+import com.uc.homehealth.ui.theme.customColors
 import com.uc.homehealth.ui.viewmodel.SettingsUiState
 import com.uc.homehealth.ui.viewmodel.SettingsViewModel
 
-private const val HA_COMPANION_PACKAGE = "io.homeassistant.companion.android"
-private const val HA_COMPANION_MINIMAL_PACKAGE = "io.homeassistant.companion.android.minimal"
-
-private val HaBlue = Color(0xFF18BCF2)
+private fun settingsSlideSpring() = spring(
+    stiffness = Spring.StiffnessMediumLow,
+    visibilityThreshold = IntOffset.VisibilityThreshold,
+)
 
 private enum class SettingsDestination : NavKey {
     Main,
     HomeAssistant,
+    Updates,
     Profile,
     Appearance,
+    AdditionalCards,
+    Voice,
+    ManageData,
+    About,
 }
 
 // Caffeine-style segment shapes. HomeHealth's shape scale is 2x M3 defaults,
@@ -105,8 +114,11 @@ private fun segmentedListItemShapes(index: Int, count: Int): ListItemShapes =
 @Composable
 fun SettingsScreen(
     onConnect: (String) -> Unit,
-    onOpenGlanceSheet: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
+    onSheetVisibleChange: (Boolean) -> Unit = {},
+    // Opens the top-level nav-bar editor route (lives outside Settings' own NavDisplay
+    // so the real bottom bar stays visible as a live preview while editing).
+    onEditNavBar: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val backStack = rememberNavBackStack(SettingsDestination.Main)
@@ -120,20 +132,22 @@ fun SettingsScreen(
         entryDecorators = listOf(
             rememberSaveableStateHolderNavEntryDecorator(),
         ),
+        // M3 Expressive motion physics: spatial slides ride springs, only the simple
+        // fades stay on tween (per docs/material3-expressive.md).
         transitionSpec = {
-            slideInHorizontally(animationSpec = tween(280)) { it } togetherWith
-                (slideOutHorizontally(animationSpec = tween(280)) { -it / 4 } +
+            slideInHorizontally(animationSpec = settingsSlideSpring()) { it } togetherWith
+                (slideOutHorizontally(animationSpec = settingsSlideSpring()) { -it / 4 } +
                     fadeOut(animationSpec = tween(220)))
         },
         popTransitionSpec = {
-            (slideInHorizontally(animationSpec = tween(280)) { -it / 4 } +
+            (slideInHorizontally(animationSpec = settingsSlideSpring()) { -it / 4 } +
                 fadeIn(animationSpec = tween(220))) togetherWith
-                slideOutHorizontally(animationSpec = tween(280)) { it }
+                slideOutHorizontally(animationSpec = settingsSlideSpring()) { it }
         },
         predictivePopTransitionSpec = {
-            (slideInHorizontally(animationSpec = tween(280)) { -it / 4 } +
+            (slideInHorizontally(animationSpec = settingsSlideSpring()) { -it / 4 } +
                 fadeIn(animationSpec = tween(220))) togetherWith
-                slideOutHorizontally(animationSpec = tween(280)) { it }
+                slideOutHorizontally(animationSpec = settingsSlideSpring()) { it }
         },
         entryProvider = entryProvider {
             entry<SettingsDestination> { destination ->
@@ -141,11 +155,24 @@ fun SettingsScreen(
                     SettingsDestination.Main -> SettingsListScreen(
                         uiState = uiState,
                         onOpenHomeAssistant = { backStack.add(SettingsDestination.HomeAssistant) },
+                        onOpenUpdates = { backStack.add(SettingsDestination.Updates) },
                         onOpenProfile = { backStack.add(SettingsDestination.Profile) },
-                        onOpenGlanceSheet = onOpenGlanceSheet,
                         onOpenAppearance = { backStack.add(SettingsDestination.Appearance) },
+                        onOpenNavBar = onEditNavBar,
+                        onOpenAdditionalCards = { backStack.add(SettingsDestination.AdditionalCards) },
+                        onOpenVoice = { backStack.add(SettingsDestination.Voice) },
+                        onOpenManageData = { backStack.add(SettingsDestination.ManageData) },
+                        onOpenAbout = { backStack.add(SettingsDestination.About) },
                         onRedoOnboarding = viewModel::redoOnboarding,
                     )
+                    SettingsDestination.Updates -> {
+                        val ctx = LocalContext.current
+                        UpdatesScreen(
+                            onBack = { backStack.removeAt(backStack.lastIndex) },
+                            onOpenReleaseUrl = { url -> openUrl(ctx, url) },
+                            onSheetVisibleChange = onSheetVisibleChange,
+                        )
+                    }
                     SettingsDestination.HomeAssistant -> HomeAssistantSettingsScreen(
                         uiState = uiState,
                         onUrlChange = viewModel::onUrlChange,
@@ -168,6 +195,20 @@ fun SettingsScreen(
                     SettingsDestination.Appearance -> AppearanceSettingsScreen(
                         onBack = { backStack.removeAt(backStack.lastIndex) },
                     )
+                    SettingsDestination.AdditionalCards -> AdditionalCardSettingsScreen(
+                        onBack = { backStack.removeAt(backStack.lastIndex) },
+                    )
+                    SettingsDestination.Voice -> VoiceSettingsScreen(
+                        viewModel = viewModel,
+                        onBack = { backStack.removeAt(backStack.lastIndex) },
+                    )
+                    SettingsDestination.ManageData -> ManageDataSettingsScreen(
+                        onClearActivity = viewModel::clearActivityData,
+                        onBack = { backStack.removeAt(backStack.lastIndex) },
+                    )
+                    SettingsDestination.About -> AboutSettingsScreen(
+                        onBack = { backStack.removeAt(backStack.lastIndex) },
+                    )
                 }
             }
         },
@@ -183,13 +224,19 @@ fun SettingsScreen(
 private fun SettingsListScreen(
     uiState: SettingsUiState,
     onOpenHomeAssistant: () -> Unit,
+    onOpenUpdates: () -> Unit,
     onOpenProfile: () -> Unit,
-    onOpenGlanceSheet: () -> Unit,
     onOpenAppearance: () -> Unit,
+    onOpenNavBar: () -> Unit,
+    onOpenAdditionalCards: () -> Unit,
+    onOpenVoice: () -> Unit,
+    onOpenManageData: () -> Unit,
+    onOpenAbout: () -> Unit,
     onRedoOnboarding: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
+    val haptic = rememberAppHaptics()
 
     val subtitle = when {
         uiState.isLoggedIn ->
@@ -219,22 +266,52 @@ private fun SettingsListScreen(
             onClick = onOpenHomeAssistant,
         ),
         SettingsRow(
+            title = "Updates",
+            summary = "HACS, add-ons, firmware & system updates",
+            icon = haIconFor("update"),
+            onClick = onOpenUpdates,
+        ),
+        SettingsRow(
             title = "Profile",
             summary = "Greeting name · ${uiState.userName.ifBlank { "Not set" }}",
             icon = Icons.Outlined.Person,
             onClick = onOpenProfile,
         ),
         SettingsRow(
-            title = "At a glance",
-            summary = "Configure dashboard greeting & entity slots",
-            icon = haIconFor("sparkle"),
-            onClick = onOpenGlanceSheet,
-        ),
-        SettingsRow(
             title = "Appearance",
             summary = "Light, dark, or system theme",
             icon = haIconFor("palette"),
             onClick = onOpenAppearance,
+        ),
+        SettingsRow(
+            title = "Navigation Bar",
+            summary = "Choose & reorder the bottom tabs",
+            icon = Icons.Outlined.SpaceDashboard,
+            onClick = onOpenNavBar,
+        ),
+        SettingsRow(
+            title = "Additional Card Settings",
+            summary = "Room warnings & other card options",
+            icon = haIconFor("bell"),
+            onClick = onOpenAdditionalCards,
+        ),
+        SettingsRow(
+            title = "Voice & TTS",
+            summary = "Announcement engine & voice for media players",
+            icon = Icons.Outlined.Campaign,
+            onClick = onOpenVoice,
+        ),
+        SettingsRow(
+            title = "Manage Data",
+            summary = "Activity history stored on this device",
+            icon = haIconFor("data"),
+            onClick = onOpenManageData,
+        ),
+        SettingsRow(
+            title = "About",
+            summary = "Version, credits & build info",
+            icon = Icons.Outlined.Info,
+            onClick = onOpenAbout,
         ),
     )
 
@@ -245,7 +322,7 @@ private fun SettingsListScreen(
         ) {
             categories.forEachIndexed { index, row ->
                 SegmentedListItem(
-                    onClick = row.onClick,
+                    onClick = { haptic.navigation(); row.onClick() },
                     modifier = Modifier.fillMaxWidth(),
                     leadingContent = {
                         Icon(
@@ -257,8 +334,8 @@ private fun SettingsListScreen(
                     content = {
                         Text(
                             text = row.title,
-                            fontFamily = InterFamily,
-                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = MontserratFamily,
+                            fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                             color = cs.onSurface,
                         )
@@ -266,7 +343,7 @@ private fun SettingsListScreen(
                     supportingContent = {
                         Text(
                             text = row.summary,
-                            fontFamily = InterFamily,
+                            fontFamily = MontserratFamily,
                             fontSize = 12.sp,
                             color = cs.onSurfaceVariant,
                         )
@@ -288,23 +365,27 @@ private fun SettingsListScreen(
         Spacer(Modifier.size(20.dp))
 
         OpenInHomeAssistantButton(
-            haUrl = uiState.haUrl,
+            title = "Open in Home Assistant",
+            subtitle = if (uiState.haUrl.isBlank())
+                "Devices, automations, energy & security"
+            else
+                "Devices, automations, energy & security · ${uiState.haUrl}",
             modifier = Modifier.padding(horizontal = Spacing.ml),
-            onClick = { launchHomeAssistant(context, uiState.haUrl) },
+            onClick = { haptic.navigation(); launchHomeAssistant(context, uiState.haUrl) },
         )
 
         Spacer(Modifier.size(12.dp))
 
         TextButton(
-            onClick = onRedoOnboarding,
+            onClick = { haptic.tick(); onRedoOnboarding() },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.ml),
         ) {
             Text(
                 text = "Redo onboarding",
-                fontFamily = InterFamily,
-                fontWeight = FontWeight.SemiBold,
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.Medium,
                 fontSize = 13.sp,
                 color = cs.onSurfaceVariant,
             )
@@ -332,7 +413,7 @@ private fun HomeAssistantSettingsScreen(
     onTokenChange: (String) -> Unit,
     onToggleTokenInput: () -> Unit,
     onConnectWithToken: (String, String) -> Unit,
-    onSaveRouting: (String, String, List<String>) -> Unit,
+    onSaveRouting: (String, String, List<String>, String) -> Unit,
     hasLocationPermission: () -> Boolean,
     onRefreshSsid: () -> Unit,
     onDetectCurrentSsid: () -> String?,
@@ -371,15 +452,19 @@ private fun NetworkRoutingCard(
     hasLocationPermission: () -> Boolean,
     onRefreshSsid: () -> Unit,
     onDetectCurrentSsid: () -> String?,
-    onSave: (String, String, List<String>) -> Unit,
+    onSave: (String, String, List<String>, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
+    val haptic = rememberAppHaptics()
     val localState = androidx.compose.runtime.remember(uiState.localUrl) {
         androidx.compose.runtime.mutableStateOf(uiState.localUrl)
     }
     val remoteState = androidx.compose.runtime.remember(uiState.remoteUrl) {
         androidx.compose.runtime.mutableStateOf(uiState.remoteUrl)
+    }
+    val go2rtcState = androidx.compose.runtime.remember(uiState.go2rtcUrl) {
+        androidx.compose.runtime.mutableStateOf(uiState.go2rtcUrl)
     }
     val ssidListState = androidx.compose.runtime.remember(uiState.homeSsids) {
         androidx.compose.runtime.mutableStateOf(uiState.homeSsids)
@@ -387,6 +472,7 @@ private fun NetworkRoutingCard(
     val ssidInputState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
     val localUrl = localState.value
     val remoteUrl = remoteState.value
+    val go2rtcUrl = go2rtcState.value
     val ssids = ssidListState.value
     val ssidInput = ssidInputState.value
 
@@ -423,23 +509,33 @@ private fun NetworkRoutingCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(haIconFor("wifi"), contentDescription = null, tint = cs.primary, modifier = Modifier.size(18.dp))
-            Text("Network routing", fontFamily = InterFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cs.onSurface)
+            Text("Network routing", fontFamily = MontserratFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cs.onSurface)
         }
         Text(
             text = "On any listed home Wi-Fi the app uses the local URL; everywhere else it uses the remote URL.",
-            fontFamily = InterFamily,
+            fontFamily = MontserratFamily,
             fontSize = 11.sp,
             color = cs.onSurfaceVariant,
             lineHeight = 15.sp,
         )
 
-        Text("Remote URL", fontFamily = InterFamily, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = cs.onSurface)
+        Text("Remote URL", fontFamily = MontserratFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = cs.onSurface)
         UrlField(value = remoteUrl, onValueChange = { remoteState.value = it }, placeholder = "https://ha.example.com", onGo = {})
 
-        Text("Local URL", fontFamily = InterFamily, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = cs.onSurface)
+        Text("Local URL", fontFamily = MontserratFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = cs.onSurface)
         UrlField(value = localUrl, onValueChange = { localState.value = it }, placeholder = "http://homeassistant.local:8123", onGo = {})
 
-        Text("Home Wi-Fi SSIDs", fontFamily = InterFamily, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = cs.onSurface)
+        Text("go2rtc URL (optional)", fontFamily = MontserratFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = cs.onSurface)
+        UrlField(value = go2rtcUrl, onValueChange = { go2rtcState.value = it }, placeholder = "https://go2rtc.example.com", onGo = {})
+        Text(
+            text = "Set this to a reachable, protected go2rtc instance for low-latency MSE live view. Leave blank to use WebRTC/HLS.",
+            fontFamily = MontserratFamily,
+            fontSize = 11.sp,
+            color = cs.onSurfaceVariant,
+            lineHeight = 15.sp,
+        )
+
+        Text("Home Wi-Fi SSIDs", fontFamily = MontserratFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = cs.onSurface)
         com.uc.homehealth.ui.screens.SsidChipList(ssids = ssids, onRemove = { ssid ->
             ssidListState.value = ssids.filterNot { it == ssid }
         })
@@ -451,13 +547,12 @@ private fun NetworkRoutingCard(
                 UrlField(value = ssidInput, onValueChange = { ssidInputState.value = it }, placeholder = "MyHomeWiFi", onGo = { addTyped() })
             }
             Button(
-                onClick = { addTyped() },
+                onClick = { haptic.tick(); addTyped() },
                 enabled = ssidInput.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = cs.primary),
-                shape = RoundedCornerShape(12.dp),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
             ) {
-                Text("Add", fontFamily = InterFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text("Add", fontFamily = MontserratFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
 
@@ -466,6 +561,7 @@ private fun NetworkRoutingCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             TextButton(onClick = {
+                haptic.tick()
                 if (hasLocationPermission()) {
                     val detected = onDetectCurrentSsid()
                     if (!detected.isNullOrBlank() && detected !in ssidListState.value) {
@@ -475,16 +571,15 @@ private fun NetworkRoutingCard(
                     permissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
                 }
             }) {
-                Text("Add current Wi-Fi", fontFamily = InterFamily, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = cs.primary)
+                Text("Add current Wi-Fi", fontFamily = MontserratFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = cs.primary)
             }
             Spacer(Modifier.weight(1f))
             Button(
-                onClick = { onSave(localUrl, remoteUrl, ssids) },
+                onClick = { haptic.confirm(); onSave(localUrl, remoteUrl, ssids, go2rtcUrl) },
                 colors = ButtonDefaults.buttonColors(containerColor = cs.primary),
-                shape = RoundedCornerShape(12.dp),
                 contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
             ) {
-                Text("Save", fontFamily = InterFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text("Save", fontFamily = MontserratFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
 
@@ -500,8 +595,8 @@ private fun NetworkRoutingCard(
             uiState.onHomeWifi -> "Routing: local URL (matched home Wi-Fi)"
             else -> "Routing: remote URL (no match against saved SSIDs)"
         }
-        Text(detectedLine, fontFamily = InterFamily, fontSize = 11.sp, color = cs.onSurfaceVariant, lineHeight = 15.sp)
-        Text(statusText, fontFamily = InterFamily, fontSize = 11.sp, color = cs.onSurfaceVariant, lineHeight = 15.sp)
+        Text(detectedLine, fontFamily = MontserratFamily, fontSize = 11.sp, color = cs.onSurfaceVariant, lineHeight = 15.sp)
+        Text(statusText, fontFamily = MontserratFamily, fontSize = 11.sp, color = cs.onSurfaceVariant, lineHeight = 15.sp)
     }
 }
 
@@ -532,20 +627,12 @@ private fun ProfileSettingsScreen(
 // Helpers (HA card, profile card, open-in-HA, URL field) — unchanged behavior
 // ---------------------------------------------------------------------------
 
-private fun launchHomeAssistant(context: Context, haUrl: String) {
-    val pm = context.packageManager
-    val launchIntent = pm.getLaunchIntentForPackage(HA_COMPANION_PACKAGE)
-        ?: pm.getLaunchIntentForPackage(HA_COMPANION_MINIMAL_PACKAGE)
-    if (launchIntent != null) {
-        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(launchIntent)
-        return
-    }
-    val webTarget = haUrl.takeIf { it.isNotBlank() } ?: "https://www.home-assistant.io/"
-    val viewIntent = Intent(Intent.ACTION_VIEW, Uri.parse(webTarget)).apply {
+private fun openUrl(context: Context, url: String) {
+    if (url.isBlank()) return
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    runCatching { context.startActivity(viewIntent) }
+    runCatching { context.startActivity(intent) }
 }
 
 @Composable
@@ -560,6 +647,8 @@ private fun HaConnectionCard(
     modifier: Modifier = Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
+    val custom = MaterialTheme.customColors
+    val haptic = rememberAppHaptics()
 
     Column(
         modifier = modifier
@@ -570,8 +659,8 @@ private fun HaConnectionCard(
     ) {
         if (uiState.isLoggedIn) {
             val statusColor = when (uiState.connectionStatus) {
-                WsConnectionStatus.READY -> Color(0xFF4CAF50)
-                WsConnectionStatus.CONNECTING -> Color(0xFFFFC107)
+                WsConnectionStatus.READY -> custom.mint
+                WsConnectionStatus.CONNECTING -> custom.warn
                 WsConnectionStatus.ERROR, WsConnectionStatus.AUTH_INVALID, WsConnectionStatus.IP_BANNED -> cs.error
                 WsConnectionStatus.DISCONNECTED -> cs.onSurfaceVariant
             }
@@ -590,24 +679,29 @@ private fun HaConnectionCard(
                 ) {
                     Box(modifier = Modifier.size(8.dp).background(statusColor, CircleShape))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(statusLabel, fontFamily = InterFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cs.onSurface)
-                        Text(uiState.haUrl, fontFamily = InterFamily, fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
+                        Text(statusLabel, fontFamily = MontserratFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cs.onSurface)
+                        Text(uiState.haUrl, fontFamily = MontserratFamily, fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
                     }
-                    TextButton(onClick = onDisconnect) {
-                        Text("Disconnect", fontFamily = InterFamily, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = cs.error)
+                    TextButton(onClick = { haptic.confirm(); onDisconnect() }) {
+                        Text("Disconnect", fontFamily = MontserratFamily, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = cs.error)
                     }
                 }
                 when (uiState.connectionStatus) {
                     WsConnectionStatus.ERROR -> Text(
                         text = "Check that your phone is on the same WiFi network as Home Assistant. Retrying automatically…",
-                        fontFamily = InterFamily,
+                        fontFamily = MontserratFamily,
                         fontSize = 11.sp,
                         color = cs.onSurfaceVariant,
                         lineHeight = 15.sp,
                     )
                     WsConnectionStatus.AUTH_INVALID -> Text(
-                        text = "Home Assistant rejected the saved access token. Disconnect and sign in again to issue a fresh token.",
-                        fontFamily = InterFamily,
+                        // Show HA's own reason when we have it: "Invalid access token or
+                        // password" means the token itself; a local-only / inactive-user
+                        // message means the token is fine but the *user* is restricted.
+                        text = uiState.authErrorDetail
+                            ?.let { "Home Assistant rejected the connection: “$it”. If this mentions the user or network, check the user's “local network only” setting in HA (Settings → People). Otherwise disconnect and sign in with a fresh token." }
+                            ?: "Home Assistant rejected the saved access token. Disconnect and sign in again to issue a fresh token.",
+                        fontFamily = MontserratFamily,
                         fontSize = 11.sp,
                         color = cs.onSurfaceVariant,
                         lineHeight = 15.sp,
@@ -616,7 +710,7 @@ private fun HaConnectionCard(
                         text = "Home Assistant has banned this device's IP after repeated failed logins. To restore access, " +
                             "open your HA config directory and remove this device's entry from ip_bans.yaml (or restart Home Assistant), " +
                             "then reconnect. The app will not retry on its own — retries renew the ban timer.",
-                        fontFamily = InterFamily,
+                        fontFamily = MontserratFamily,
                         fontSize = 11.sp,
                         color = cs.onSurfaceVariant,
                         lineHeight = 15.sp,
@@ -630,7 +724,7 @@ private fun HaConnectionCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(haIconFor("wifi"), contentDescription = null, tint = cs.primary, modifier = Modifier.size(18.dp))
-                Text("Home Assistant", fontFamily = InterFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cs.onSurface)
+                Text("Home Assistant", fontFamily = MontserratFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cs.onSurface)
             }
 
             UrlField(
@@ -642,19 +736,18 @@ private fun HaConnectionCard(
 
             if (!uiState.showTokenInput) {
                 Button(
-                    onClick = { if (uiState.enteredUrl.isNotBlank()) onConnect(uiState.enteredUrl) },
+                    onClick = { haptic.confirm(); if (uiState.enteredUrl.isNotBlank()) onConnect(uiState.enteredUrl) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = cs.primary),
-                    shape = RoundedCornerShape(12.dp),
                 ) {
                     Icon(haIconFor("home"), contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.size(8.dp))
-                    Text("Login with Home Assistant", fontFamily = InterFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Login with Home Assistant", fontFamily = MontserratFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
-                TextButton(onClick = onToggleTokenInput, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { haptic.tick(); onToggleTokenInput() }, modifier = Modifier.fillMaxWidth()) {
                     Text(
                         "Use long-lived access token instead",
-                        fontFamily = InterFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.Medium,
                         fontSize = 12.sp,
                         color = cs.onSurfaceVariant,
@@ -663,7 +756,7 @@ private fun HaConnectionCard(
             } else {
                 Text(
                     text = "Paste your long-lived access token (HA → Profile → Security → Long-lived access tokens)",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontSize = 11.sp,
                     color = cs.onSurfaceVariant,
                     lineHeight = 16.sp,
@@ -679,23 +772,25 @@ private fun HaConnectionCard(
                 )
                 Button(
                     onClick = {
+                        haptic.confirm()
                         if (uiState.enteredUrl.isNotBlank() && uiState.enteredToken.isNotBlank())
                             onConnectWithToken(uiState.enteredUrl, uiState.enteredToken)
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = cs.primary),
-                    shape = RoundedCornerShape(12.dp),
                 ) {
-                    Text("Connect with Token", fontFamily = InterFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Connect with Token", fontFamily = MontserratFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
-                TextButton(onClick = onToggleTokenInput, modifier = Modifier.fillMaxWidth()) {
-                    Text("Use OAuth login instead", fontFamily = InterFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = cs.onSurfaceVariant)
+                TextButton(onClick = { haptic.tick(); onToggleTokenInput() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Use OAuth login instead", fontFamily = MontserratFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = cs.onSurfaceVariant)
                 }
             }
         }
     }
 }
 
+// Stock M3 text field (same component as the Energy setup sheet) — theme-aware
+// placeholder/container colors come from the component, not hand-rolled alphas.
 @Composable
 private fun UrlField(
     value: String,
@@ -703,28 +798,16 @@ private fun UrlField(
     placeholder: String,
     onGo: () -> Unit,
 ) {
-    val cs = MaterialTheme.colorScheme
-    BasicTextField(
+    OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        textStyle = TextStyle(fontFamily = InterFamily, fontSize = 13.sp, color = cs.onSurface),
-        cursorBrush = SolidColor(cs.primary),
+        textStyle = TextStyle(fontFamily = MontserratFamily, fontSize = 13.sp),
+        placeholder = { Text(placeholder, fontFamily = MontserratFamily, fontSize = 13.sp) },
         singleLine = true,
+        shape = MaterialTheme.shapes.small,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
         keyboardActions = KeyboardActions(onGo = { onGo() }),
-        decorationBox = { inner ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(cs.surfaceVariant, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-            ) {
-                if (value.isEmpty()) {
-                    Text(placeholder, fontFamily = InterFamily, fontSize = 13.sp, color = cs.onSurfaceVariant.copy(alpha = 0.5f))
-                }
-                inner()
-            }
-        },
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
@@ -739,16 +822,8 @@ private fun ProfileCard(
         modifier = modifier
             .fillMaxWidth()
             .background(cs.surfaceContainerHigh, MaterialTheme.shapes.large)
-            .clip(MaterialTheme.shapes.large)
             .padding(horizontal = 18.dp, vertical = 16.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .align(Alignment.TopEnd)
-                .background(cs.primary.copy(alpha = 0.20f), CircleShape)
-                .blur(20.dp),
-        )
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -769,7 +844,7 @@ private fun ProfileCard(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = "GREETING NAME",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 10.sp,
                     color = cs.onSurfaceVariant,
@@ -790,72 +865,15 @@ private fun NameField(
     onValueChange: (String) -> Unit,
     placeholder: String,
 ) {
-    val cs = MaterialTheme.colorScheme
-    BasicTextField(
+    OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        textStyle = TextStyle(fontFamily = InterFamily, fontSize = 13.sp, color = cs.onSurface),
-        cursorBrush = SolidColor(cs.primary),
+        textStyle = TextStyle(fontFamily = MontserratFamily, fontSize = 13.sp),
+        placeholder = { Text(placeholder, fontFamily = MontserratFamily, fontSize = 13.sp) },
         singleLine = true,
+        shape = MaterialTheme.shapes.small,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done),
-        decorationBox = { inner ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(cs.surfaceVariant, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-            ) {
-                if (value.isEmpty()) {
-                    Text(placeholder, fontFamily = InterFamily, fontSize = 13.sp, color = cs.onSurfaceVariant.copy(alpha = 0.5f))
-                }
-                inner()
-            }
-        },
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
-@Composable
-private fun OpenInHomeAssistantButton(
-    haUrl: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = HaBlue,
-            contentColor = Color.White,
-        ),
-        shape = RoundedCornerShape(16.dp),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
-    ) {
-        Icon(
-            painter = painterResource(id = R.drawable.ic_home_assistant),
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(modifier = Modifier.size(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Open in Home Assistant",
-                fontFamily = InterFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = Color.White,
-            )
-            Text(
-                text = if (haUrl.isBlank())
-                    "Devices, automations, energy & security"
-                else
-                    "Devices, automations, energy & security · $haUrl",
-                fontFamily = InterFamily,
-                fontWeight = FontWeight.Medium,
-                fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.85f),
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-    }
-}

@@ -18,6 +18,9 @@ data class HaMedia(
     val shuffleOn: Boolean,
     val repeatMode: MediaRepeatMode,
     val entityPictureUrl: String?,
+    // True when the entity registry says this player belongs to the Music Assistant
+    // integration — unlocks the card's MA-only controls (search & play).
+    val isMusicAssistant: Boolean = false,
 )
 
 enum class MediaRepeatMode { OFF, ALL, ONE;

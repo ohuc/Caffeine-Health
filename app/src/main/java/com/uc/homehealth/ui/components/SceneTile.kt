@@ -14,7 +14,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uc.homehealth.data.HaScene
-import com.uc.homehealth.ui.theme.InterFamily
 import com.uc.homehealth.ui.theme.MontserratFamily
 import com.uc.homehealth.ui.theme.PillShape
 
@@ -43,8 +42,8 @@ fun SceneTile(
             Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
                     text = scene.name,
-                    fontFamily = InterFamily,
-                    fontWeight = FontWeight.Bold,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 13.sp,
                     letterSpacing = (-0.1).sp,
                     color = if (isActive) cs.onPrimary else cs.onSurface,
@@ -52,7 +51,7 @@ fun SceneTile(
                 Text(
                     text = if (isActive) "Active" else "Tap to run",
                     fontFamily = MontserratFamily,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 10.sp,
                     color = (if (isActive) cs.onPrimary else cs.onSurface).copy(alpha = 0.65f),
                 )

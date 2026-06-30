@@ -7,4 +7,11 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Splash screen (light). Background matches the app's warm cream surface so the
+         hand-off to the Compose dashboard skeleton is seamless. The icon sits inside a
+         white circle (same value in dark) carrying the taupe + sand Pulse House, mirroring
+         the companion "Caffeine Health" white-field mark. -->
+    <color name="splash_background">#F4F1EC</color>
+    <color name="splash_icon_circle">#FFFFFF</color>
 </resources>

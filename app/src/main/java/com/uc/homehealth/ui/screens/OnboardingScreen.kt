@@ -1,18 +1,29 @@
 package com.uc.homehealth.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -33,39 +44,63 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.graphics.shapes.Morph
+import androidx.graphics.shapes.toPath
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.uc.homehealth.ui.components.glanceInkOn
 import com.uc.homehealth.ui.components.haIconFor
+import com.uc.homehealth.ui.components.rememberTileBlobShape
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
+import com.uc.homehealth.ui.theme.MontserratFamily
 import com.uc.homehealth.ui.theme.Spacing
+import com.uc.homehealth.ui.theme.customColors
 import com.uc.homehealth.ui.viewmodel.OnboardingViewModel
 import kotlinx.coroutines.launch
 
 private const val PAGE_COUNT = 3
+
+// Shared top padding so every step's header anchors at the same Y — consistent across pages.
+private val HeaderTopGap = 28.dp
 
 @Composable
 fun OnboardingScreen(
@@ -125,7 +160,7 @@ fun OnboardingScreen(
                 currentPage = pagerState.currentPage,
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
-                    .padding(vertical = 12.dp),
+                    .padding(vertical = 14.dp),
             )
 
             OnboardingFooter(
@@ -151,64 +186,74 @@ fun OnboardingScreen(
 }
 
 // ─── Pages ────────────────────────────────────────────────────────────────────
+// Every page is top-anchored (no vertical centering) so headers line up step-to-step.
 
 @Composable
 private fun WelcomePage() {
     val cs = MaterialTheme.colorScheme
+    val cc = MaterialTheme.customColors
+
+    // One-time staggered entrance: hero, then heading, then each value prop.
+    val appear = remember { MutableTransitionState(false) }
+    LaunchedEffect(Unit) { appear.targetState = true }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = Spacing.xl),
-        verticalArrangement = Arrangement.Center,
     ) {
-        Spacer(Modifier.height(24.dp))
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-            Box(
-                modifier = Modifier
-                    .size(180.dp)
-                    .background(cs.primary.copy(alpha = 0.18f), CircleShape)
-                    .blur(40.dp),
+        Spacer(Modifier.height(HeaderTopGap))
+
+        Staggered(appear, delayMillis = 0) {
+            MorphingHero(
+                color = cs.primary,
+                glyphName = "pulse",
+                modifier = Modifier.size(160.dp),
             )
-            Column {
-                Text(
-                    text = "Welcome to",
-                    fontFamily = InterFamily,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = cs.onSurfaceVariant,
-                )
-                Text(
-                    text = "Home Health",
-                    fontFamily = InstrumentSerifFamily,
-                    fontStyle = FontStyle.Italic,
-                    fontSize = 56.sp,
-                    color = cs.onBackground,
-                    lineHeight = 60.sp,
-                )
-            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+
+        Staggered(appear, delayMillis = 90) {
+            PageHeader(
+                kicker = "Welcome to",
+                title = "Home Health",
+                subtitle = "Your whole home, one calm tap away.",
+                titleSize = 56.sp,
+            )
+        }
+
+        Spacer(Modifier.height(28.dp))
+
+        Staggered(appear, delayMillis = 200) {
+            ValueProp(
+                iconName = "shield",
+                accent = cc.sky,
+                title = "Free & open source",
+                body = "Inspect it, build it, or fork it — the whole app is FOSS. You're in control.",
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Staggered(appear, delayMillis = 290) {
+            ValueProp(
+                iconName = "lock",
+                accent = cc.mint,
+                title = "Zero telemetry",
+                body = "No analytics, no ads, no trackers. Nothing about your home leaves your device.",
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Staggered(appear, delayMillis = 380) {
+            ValueProp(
+                iconName = "wifi",
+                accent = cc.sand,
+                title = "Straight to your home",
+                body = "Talks directly to your Home Assistant on your own network — no servers in the middle.",
+            )
         }
 
         Spacer(Modifier.height(32.dp))
-
-        InfoCard(
-            iconName = "shield",
-            title = "Free, open source, FOSS",
-            body = "The whole app is open source. Inspect the code, build it yourself, or fork it — you decide.",
-        )
-        Spacer(Modifier.height(12.dp))
-        InfoCard(
-            iconName = "pulse",
-            title = "Zero telemetry",
-            body = "No analytics, no crash collectors, no ads. Nothing leaves your device.",
-        )
-        Spacer(Modifier.height(12.dp))
-        InfoCard(
-            iconName = "wifi",
-            title = "Talks straight to your Home Assistant",
-            body = "Your data stays on your network. The app connects directly to your HA — no servers in the middle.",
-        )
-        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -218,83 +263,80 @@ private fun NamePage(
     onNameChange: (String) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val blob = rememberTileBlobShape()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = Spacing.xl),
-        verticalArrangement = Arrangement.Center,
     ) {
-        Spacer(Modifier.height(24.dp))
-        Text(
-            text = "What should we call you?",
-            fontFamily = InstrumentSerifFamily,
-            fontStyle = FontStyle.Italic,
-            fontSize = 40.sp,
-            color = cs.onBackground,
-            lineHeight = 46.sp,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Used in the dashboard greeting. You can change it any time in Settings.",
-            fontFamily = InterFamily,
-            fontSize = 14.sp,
-            color = cs.onSurfaceVariant,
-            lineHeight = 20.sp,
+        Spacer(Modifier.height(HeaderTopGap))
+
+        PageHeader(
+            kicker = "Personalize",
+            title = "What should we call you?",
+            subtitle = "Used in your dashboard greeting. You can change it any time in Settings.",
         )
 
         Spacer(Modifier.height(28.dp))
 
-        Box(
+        // Live greeting preview — gives the page a clear focal block and shows the payoff.
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(MaterialTheme.shapes.large)
+                .clip(RoundedCornerShape(28.dp))
                 .background(cs.surfaceContainerHigh)
-                .padding(horizontal = 18.dp, vertical = 18.dp),
+                .padding(vertical = 28.dp, horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(
-                modifier = Modifier
-                    .size(140.dp)
-                    .align(Alignment.TopEnd)
-                    .background(cs.primary.copy(alpha = 0.20f), CircleShape)
-                    .blur(24.dp),
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.size(104.dp).clip(blob).background(cs.primary),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    modifier = Modifier.size(56.dp).background(cs.primary, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = name.firstOrNull()?.toString()?.uppercase() ?: "A",
-                        fontFamily = InstrumentSerifFamily,
-                        fontSize = 28.sp,
-                        color = cs.onPrimary,
-                    )
-                }
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "GREETING NAME",
-                        fontFamily = InterFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp,
-                        color = cs.onSurfaceVariant,
-                    )
-                    PlainField(
-                        value = name,
-                        onValueChange = onNameChange,
-                        placeholder = "Your name",
-                        keyboard = KeyboardOptions(
-                            keyboardType = KeyboardType.Text,
-                            imeAction = ImeAction.Done,
-                        ),
-                    )
-                }
+                Text(
+                    text = name.trim().firstOrNull()?.toString()?.uppercase() ?: "✦",
+                    fontFamily = InstrumentSerifFamily,
+                    fontStyle = FontStyle.Italic,
+                    fontSize = 52.sp,
+                    color = cs.onPrimary,
+                )
             }
+            Spacer(Modifier.height(18.dp))
+            Text(
+                text = if (name.isBlank()) "Welcome home." else "Welcome home, ${name.trim()}.",
+                fontFamily = InstrumentSerifFamily,
+                fontStyle = FontStyle.Italic,
+                fontSize = 26.sp,
+                color = cs.onSurface,
+                lineHeight = 30.sp,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "DASHBOARD GREETING PREVIEW",
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp,
+                letterSpacing = 1.5.sp,
+                color = cs.onSurfaceVariant,
+            )
         }
+
         Spacer(Modifier.height(24.dp))
+
+        FieldLabel(iconName = "sparkle", text = "Greeting name", accent = cs.primary)
+        Spacer(Modifier.height(10.dp))
+        ExpressiveField(
+            value = name,
+            onValueChange = onNameChange,
+            placeholder = "Your name",
+            keyboard = KeyboardOptions(
+                keyboardType = KeyboardType.Text,
+                imeAction = ImeAction.Done,
+            ),
+        )
+
+        Spacer(Modifier.height(32.dp))
     }
 }
 
@@ -320,209 +362,121 @@ private fun ConnectPage(
     ) { granted -> if (granted) onSsidDetected() }
 
     val cs = MaterialTheme.colorScheme
+    val cc = MaterialTheme.customColors
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = Spacing.xl),
     ) {
-        Spacer(Modifier.height(24.dp))
-        Text(
-            text = "Connect Home Assistant",
-            fontFamily = InstrumentSerifFamily,
-            fontStyle = FontStyle.Italic,
-            fontSize = 40.sp,
-            color = cs.onBackground,
-            lineHeight = 46.sp,
+        Spacer(Modifier.height(HeaderTopGap))
+
+        PageHeader(
+            kicker = "Connect",
+            title = "Connect Home Assistant",
+            subtitle = "Add your server URL and a long-lived access token. Not ready? Skip and explore with sample data first.",
         )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Enter your HA server URL and a long-lived access token. Or skip and explore the app with sample data first.",
-            fontFamily = InterFamily,
-            fontSize = 14.sp,
-            color = cs.onSurfaceVariant,
-            lineHeight = 20.sp,
+
+        Spacer(Modifier.height(28.dp))
+
+        // Sections live directly on the background (no wrapper card) so the filled fields
+        // keep contrast — surfaceVariant == surfaceContainerHigh, so a card would hide them.
+        FieldLabel(iconName = "wifi", text = "Remote URL", accent = cs.primary)
+        Spacer(Modifier.height(10.dp))
+        ExpressiveField(
+            value = url,
+            onValueChange = onUrlChange,
+            placeholder = "https://ha.example.com",
+            keyboard = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
         )
 
         Spacer(Modifier.height(20.dp))
+        FieldLabel(iconName = "wifi", text = "Local URL (optional)", accent = cc.sky)
+        Spacer(Modifier.height(10.dp))
+        ExpressiveField(
+            value = localUrl,
+            onValueChange = onLocalUrlChange,
+            placeholder = "http://homeassistant.local:8123",
+            keyboard = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
+        )
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(cs.surfaceContainerHigh, MaterialTheme.shapes.large)
-                .padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    imageVector = haIconFor("wifi"),
-                    contentDescription = null,
-                    tint = cs.primary,
-                    modifier = Modifier.size(18.dp),
-                )
-                Text(
-                    "Remote URL (used away from home)",
-                    fontFamily = InterFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    color = cs.onSurface,
-                )
-            }
-            PlainField(
-                value = url,
-                onValueChange = onUrlChange,
-                placeholder = "https://ha.example.com",
-                keyboard = KeyboardOptions(
-                    keyboardType = KeyboardType.Uri,
-                    imeAction = ImeAction.Next,
-                ),
-            )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    imageVector = haIconFor("wifi"),
-                    contentDescription = null,
-                    tint = cs.primary,
-                    modifier = Modifier.size(18.dp),
-                )
-                Text(
-                    "Local URL (optional, used on home Wi-Fi)",
-                    fontFamily = InterFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    color = cs.onSurface,
-                )
-            }
-            PlainField(
-                value = localUrl,
-                onValueChange = onLocalUrlChange,
-                placeholder = "http://homeassistant.local:8123",
-                keyboard = KeyboardOptions(
-                    keyboardType = KeyboardType.Uri,
-                    imeAction = ImeAction.Next,
-                ),
-            )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    imageVector = haIconFor("wifi"),
-                    contentDescription = null,
-                    tint = cs.primary,
-                    modifier = Modifier.size(18.dp),
-                )
-                Text(
-                    "Home Wi-Fi SSIDs",
-                    fontFamily = InterFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    color = cs.onSurface,
-                )
-            }
+        Spacer(Modifier.height(20.dp))
+        FieldLabel(iconName = "wifi", text = "Home Wi-Fi networks", accent = cc.mint)
+        Spacer(Modifier.height(10.dp))
+        if (ssids.isNotEmpty()) {
             SsidChipList(ssids = ssids, onRemove = onRemoveSsid)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    PlainField(
-                        value = ssidInput,
-                        onValueChange = onSsidInputChange,
-                        placeholder = "MyHomeWiFi",
-                        keyboard = KeyboardOptions(
-                            keyboardType = KeyboardType.Text,
-                            imeAction = ImeAction.Done,
-                        ),
-                    )
-                }
-                Button(
-                    onClick = onAddSsid,
-                    enabled = ssidInput.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = cs.primary),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                ) {
-                    Text("Add", fontFamily = InterFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                }
-            }
-            TextButton(
-                onClick = {
-                    if (hasLocationPermission()) onSsidDetected()
-                    else permissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                },
-            ) {
-                Text(
-                    "Add current Wi-Fi",
-                    fontFamily = InterFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp,
-                    color = cs.primary,
+            Spacer(Modifier.height(10.dp))
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                ExpressiveField(
+                    value = ssidInput,
+                    onValueChange = onSsidInputChange,
+                    placeholder = "MyHomeWiFi",
+                    keyboard = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done),
                 )
             }
-            Text(
-                text = "When connected to any listed Wi-Fi the app uses the local URL; otherwise it uses the remote URL. Detection needs Location permission and Location Services turned on.",
-                fontFamily = InterFamily,
-                fontSize = 11.sp,
-                color = cs.onSurfaceVariant,
-                lineHeight = 15.sp,
-            )
-            if (!locationServicesEnabled) {
-                Text(
-                    text = "Location Services are off — turn them on in system settings to detect the current Wi-Fi.",
-                    fontFamily = InterFamily,
-                    fontSize = 11.sp,
-                    color = cs.error,
-                    lineHeight = 15.sp,
-                )
-            }
-
-            Spacer(Modifier.height(2.dp))
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    imageVector = haIconFor("lock"),
-                    contentDescription = null,
-                    tint = cs.primary,
-                    modifier = Modifier.size(18.dp),
-                )
-                Text(
-                    "Long-lived access token",
-                    fontFamily = InterFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    color = cs.onSurface,
-                )
-            }
-            PlainField(
-                value = token,
-                onValueChange = onTokenChange,
-                placeholder = "eyJhbGciOi…",
-                keyboard = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done,
-                ),
-                visualTransformation = PasswordVisualTransformation(),
-            )
-
-            Text(
-                text = "HA → Profile → Security → Long-lived access tokens",
-                fontFamily = InterFamily,
-                fontSize = 11.sp,
-                color = cs.onSurfaceVariant,
+            RoundIconButton(
+                iconName = null,
+                enabled = ssidInput.isNotBlank(),
+                onClick = onAddSsid,
             )
         }
-        Spacer(Modifier.height(24.dp))
+        TextButton(
+            onClick = {
+                if (hasLocationPermission()) onSsidDetected()
+                else permissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+            },
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        ) {
+            Text(
+                "Use my current Wi-Fi",
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                color = cs.primary,
+            )
+        }
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = "On any listed network the app uses the local URL; elsewhere it uses the remote URL. Detection needs Location permission and Location Services on.",
+            fontFamily = MontserratFamily,
+            fontSize = 11.sp,
+            color = cs.onSurfaceVariant,
+            lineHeight = 15.sp,
+        )
+        if (!locationServicesEnabled) {
+            Text(
+                text = "Location Services are off — turn them on in system settings to detect the current Wi-Fi.",
+                fontFamily = MontserratFamily,
+                fontSize = 11.sp,
+                color = cs.error,
+                lineHeight = 15.sp,
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+        FieldLabel(iconName = "lock", text = "Long-lived access token", accent = cc.coral)
+        Spacer(Modifier.height(10.dp))
+        ExpressiveField(
+            value = token,
+            onValueChange = onTokenChange,
+            placeholder = "eyJhbGciOi…",
+            keyboard = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            visualTransformation = PasswordVisualTransformation(),
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "HA → Profile → Security → Long-lived access tokens",
+            fontFamily = MontserratFamily,
+            fontSize = 11.sp,
+            color = cs.onSurfaceVariant,
+        )
+
+        Spacer(Modifier.height(32.dp))
     }
 }
 
@@ -540,8 +494,13 @@ private fun OnboardingFooter(
 ) {
     val cs = MaterialTheme.colorScheme
     val isLast = currentPage == PAGE_COUNT - 1
+    val label = when (currentPage) {
+        0 -> "Get started"
+        1 -> "Continue"
+        else -> "Connect"
+    }
 
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -555,44 +514,19 @@ private fun OnboardingFooter(
                 TextButton(onClick = onBack) {
                     Text(
                         "Back",
-                        fontFamily = InterFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
                         color = cs.onSurfaceVariant,
                     )
                 }
             }
             Spacer(Modifier.weight(1f))
-            if (isLast) {
-                Button(
-                    onClick = onConnect,
-                    enabled = connectEnabled,
-                    colors = ButtonDefaults.buttonColors(containerColor = cs.primary),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(horizontal = 22.dp, vertical = 12.dp),
-                ) {
-                    Text(
-                        "Connect",
-                        fontFamily = InterFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                    )
-                }
-            } else {
-                Button(
-                    onClick = onNext,
-                    colors = ButtonDefaults.buttonColors(containerColor = cs.primary),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(horizontal = 22.dp, vertical = 12.dp),
-                ) {
-                    Text(
-                        "Continue",
-                        fontFamily = InterFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                    )
-                }
-            }
+            PrimaryCta(
+                label = label,
+                enabled = !isLast || connectEnabled,
+                onClick = { if (isLast) onConnect() else onNext() },
+            )
         }
         if (isLast) {
             TextButton(
@@ -600,14 +534,47 @@ private fun OnboardingFooter(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    "Skip — explore with demo data",
-                    fontFamily = InterFamily,
+                    "Skip — explore with sample data",
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Medium,
                     fontSize = 13.sp,
                     color = cs.onSurfaceVariant,
                 )
             }
         }
+    }
+}
+
+// Large expressive pill CTA: bold label + trailing arrow, accent fill.
+@Composable
+private fun PrimaryCta(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = cs.primary,
+            contentColor = cs.onPrimary,
+        ),
+        shape = CircleShape,
+        contentPadding = PaddingValues(start = 28.dp, end = 22.dp, top = 16.dp, bottom = 16.dp),
+    ) {
+        Text(
+            label,
+            fontFamily = MontserratFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+        )
+        Spacer(Modifier.size(8.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 
@@ -620,17 +587,21 @@ private fun PageIndicator(
     val cs = MaterialTheme.colorScheme
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         repeat(pageCount) { i ->
             val active = i == currentPage
-            val width by animateDpAsState(if (active) 22.dp else 8.dp, label = "dot_w")
+            val width by animateDpAsState(
+                targetValue = if (active) 28.dp else 8.dp,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                label = "dot_w",
+            )
             Box(
                 modifier = Modifier
                     .size(width = width, height = 8.dp)
                     .background(
-                        if (active) cs.primary else cs.onSurfaceVariant.copy(alpha = 0.35f),
+                        if (active) cs.primary else cs.onSurfaceVariant.copy(alpha = 0.30f),
                         CircleShape,
                     ),
             )
@@ -638,11 +609,113 @@ private fun PageIndicator(
     }
 }
 
-// ─── Building blocks ──────────────────────────────────────────────────────────
+// ─── Expressive building blocks ─────────────────────────────────────────────────
 
+// Consistent header for every step: accent kicker + serif-italic title + subtitle.
 @Composable
-private fun InfoCard(
+private fun PageHeader(
+    kicker: String,
+    title: String,
+    subtitle: String,
+    titleSize: TextUnit = 42.sp,
+) {
+    val cs = MaterialTheme.colorScheme
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = kicker.uppercase(),
+            fontFamily = MontserratFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            letterSpacing = 2.sp,
+            color = cs.primary,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = title,
+            fontFamily = InstrumentSerifFamily,
+            fontStyle = FontStyle.Italic,
+            fontSize = titleSize,
+            color = cs.onBackground,
+            lineHeight = titleSize * 1.08f,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = subtitle,
+            fontFamily = MontserratFamily,
+            fontSize = 14.sp,
+            color = cs.onSurfaceVariant,
+            lineHeight = 20.sp,
+        )
+    }
+}
+
+// Big morphing MaterialShapes focal point — the hero moment. Slowly morphs between two
+// expressive polygons and rotates, with a glyph centered on top. Flat fill, no glow.
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun MorphingHero(
+    color: Color,
+    glyphName: String,
+    modifier: Modifier = Modifier,
+) {
+    val cs = MaterialTheme.colorScheme
+    val morph = remember { Morph(MaterialShapes.Cookie9Sided, MaterialShapes.Clover4Leaf) }
+    val transition = rememberInfiniteTransition(label = "hero")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 5200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "morph",
+    )
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 26000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "rotation",
+    )
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawBehind {
+                    val path = morph.toPath(progress).asComposePath()
+                    val b = path.getBounds()
+                    val span = maxOf(b.width, b.height)
+                    if (span <= 0f) return@drawBehind
+                    val scale = size.minDimension / span
+                    // Apply (to a point) in order: center→origin, rotate, scale, →box center.
+                    // Compose Matrix post-multiplies, so calls are added in reverse of that order.
+                    val matrix = Matrix().apply {
+                        translate(size.width / 2f, size.height / 2f)
+                        scale(scale, scale)
+                        rotateZ(rotation)
+                        translate(-(b.left + b.width / 2f), -(b.top + b.height / 2f))
+                    }
+                    path.transform(matrix)
+                    drawPath(path, color)
+                },
+        )
+        Icon(
+            imageVector = haIconFor(glyphName),
+            contentDescription = null,
+            tint = cs.onPrimary,
+            modifier = Modifier.size(52.dp),
+        )
+    }
+}
+
+// Value proposition row: an expressive shape icon-chip in a vibrant accent + title/body.
+@Composable
+private fun ValueProp(
     iconName: String,
+    accent: Color,
     title: String,
     body: String,
 ) {
@@ -650,35 +723,24 @@ private fun InfoCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(cs.surfaceContainerHigh, MaterialTheme.shapes.large)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+            .clip(RoundedCornerShape(22.dp))
+            .background(cs.surfaceContainerHigh)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .background(cs.primaryContainer, RoundedCornerShape(14.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = haIconFor(iconName),
-                contentDescription = null,
-                tint = cs.onPrimaryContainer,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        ShapeIcon(iconName = iconName, accent = accent, size = 48.dp, iconSize = 24.dp)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
                 text = title,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 color = cs.onSurface,
             )
             Text(
                 text = body,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,
                 lineHeight = 17.sp,
@@ -687,20 +749,74 @@ private fun InfoCard(
     }
 }
 
+// An icon clipped into the app's signature expressive blob shape, filled with an accent.
 @Composable
-private fun PlainField(
+private fun ShapeIcon(
+    iconName: String,
+    accent: Color,
+    size: Dp,
+    iconSize: Dp,
+) {
+    val blob = rememberTileBlobShape()
+    Box(
+        modifier = Modifier.size(size).clip(blob).background(accent),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = haIconFor(iconName),
+            contentDescription = null,
+            tint = glanceInkOn(accent),
+            modifier = Modifier.size(iconSize),
+        )
+    }
+}
+
+@Composable
+private fun FieldLabel(iconName: String, text: String, accent: Color) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        ShapeIcon(iconName = iconName, accent = accent, size = 30.dp, iconSize = 16.dp)
+        Text(
+            text = text,
+            fontFamily = MontserratFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+            color = cs.onSurface,
+        )
+    }
+}
+
+// Rounded, filled input with a subtle resting outline and an animated accent focus ring.
+@Composable
+private fun ExpressiveField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
     keyboard: KeyboardOptions,
-    visualTransformation: androidx.compose.ui.text.input.VisualTransformation =
-        androidx.compose.ui.text.input.VisualTransformation.None,
+    modifier: Modifier = Modifier,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     val cs = MaterialTheme.colorScheme
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(16.dp)
+    val borderColor by animateColorAsState(
+        targetValue = if (focused) cs.primary else cs.outline,
+        label = "field_border",
+    )
+    val borderWidth by animateDpAsState(
+        targetValue = if (focused) 1.5.dp else 1.dp,
+        label = "field_border_w",
+    )
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
-        textStyle = TextStyle(fontFamily = InterFamily, fontSize = 13.sp, color = cs.onSurface),
+        modifier = modifier
+            .fillMaxWidth()
+            .onFocusChanged { focused = it.isFocused },
+        textStyle = TextStyle(fontFamily = MontserratFamily, fontSize = 15.sp, color = cs.onSurface),
         cursorBrush = SolidColor(cs.primary),
         singleLine = true,
         keyboardOptions = keyboard,
@@ -710,14 +826,16 @@ private fun PlainField(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(cs.surfaceVariant, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .clip(shape)
+                    .background(cs.surfaceVariant)
+                    .border(borderWidth, borderColor, shape)
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
             ) {
                 if (value.isEmpty()) {
                     Text(
                         placeholder,
-                        fontFamily = InterFamily,
-                        fontSize = 13.sp,
+                        fontFamily = MontserratFamily,
+                        fontSize = 15.sp,
                         color = cs.onSurfaceVariant.copy(alpha = 0.5f),
                     )
                 }
@@ -725,6 +843,51 @@ private fun PlainField(
             }
         },
     )
+}
+
+// Circular accent button (used to commit a typed SSID).
+@Composable
+private fun RoundIconButton(
+    iconName: String?,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val alpha = if (enabled) 1f else 0.4f
+    Box(
+        modifier = Modifier
+            .size(52.dp)
+            .clip(CircleShape)
+            .background(cs.primary.copy(alpha = alpha))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (iconName == null) Icons.Outlined.Add else haIconFor(iconName),
+            contentDescription = "Add",
+            tint = cs.onPrimary,
+            modifier = Modifier.size(24.dp),
+        )
+    }
+}
+
+// One-shot staggered entrance wrapper: fade + slide-up driven by a shared transition state.
+@Composable
+private fun Staggered(
+    state: MutableTransitionState<Boolean>,
+    delayMillis: Int,
+    content: @Composable () -> Unit,
+) {
+    AnimatedVisibility(
+        visibleState = state,
+        enter = fadeIn(tween(durationMillis = 420, delayMillis = delayMillis)) +
+            slideInVertically(
+                animationSpec = tween(durationMillis = 460, delayMillis = delayMillis),
+                initialOffsetY = { it / 4 },
+            ),
+    ) {
+        content()
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -740,16 +903,17 @@ internal fun SsidChipList(ssids: List<String>, onRemove: (String) -> Unit) {
         ssids.forEach { ssid ->
             Row(
                 modifier = Modifier
-                    .background(cs.primaryContainer, RoundedCornerShape(20.dp))
-                    .padding(start = 12.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    .clip(CircleShape)
+                    .background(cs.primaryContainer)
+                    .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
                     text = ssid,
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Medium,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     color = cs.onPrimaryContainer,
                 )
                 Box(

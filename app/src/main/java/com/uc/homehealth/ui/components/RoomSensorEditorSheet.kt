@@ -57,7 +57,6 @@ import com.uc.homehealth.data.HaEntitySummary
 import com.uc.homehealth.data.HaRoom
 import com.uc.homehealth.data.RoomSensorOverride
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
 import com.uc.homehealth.ui.theme.MontserratFamily
 import dev.chrisbanes.haze.HazeState
 
@@ -167,7 +166,7 @@ private fun MainView(
             Text(
                 text = room?.let { "Pick the sensors used for ${it.name}." }
                     ?: "Pick the sensors used for this room.",
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,
@@ -244,7 +243,7 @@ private fun SensorSlot(
                 }
                 Text(
                     text = title,
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = cs.onSurface,
@@ -332,7 +331,7 @@ private fun SensorPickerView(
                 )
                 Text(
                     text = subtitle,
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 11.sp,
                     color = cs.onSurfaceVariant,
@@ -358,7 +357,7 @@ private fun SensorPickerView(
             ) {
                 Text(
                     text = "No numeric sensor entities found.",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontSize = 13.sp,
                     color = cs.onSurfaceVariant,
                 )
@@ -389,7 +388,7 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit) {
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        textStyle = TextStyle(fontFamily = InterFamily, fontSize = 14.sp, color = cs.onSurface),
+        textStyle = TextStyle(fontFamily = MontserratFamily, fontSize = 14.sp, color = cs.onSurface),
         cursorBrush = SolidColor(cs.primary),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(),
@@ -413,7 +412,7 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit) {
                     if (value.isEmpty()) {
                         Text(
                             text = "Search by name or entity id",
-                            fontFamily = InterFamily,
+                            fontFamily = MontserratFamily,
                             fontSize = 14.sp,
                             color = cs.onSurfaceVariant.copy(alpha = 0.5f),
                         )
@@ -472,7 +471,7 @@ private fun SensorRow(
             ) {
                 Text(
                     text = entity.friendlyName,
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = cs.onSurface,
@@ -488,7 +487,7 @@ private fun SensorRow(
             }
             Text(
                 text = entity.state,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,

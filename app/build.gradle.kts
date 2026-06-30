@@ -18,6 +18,13 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Opt-in slim build for sharing the APK directly (chat/email): arm64-only strips
+        // the other ABIs' native libs (WebRTC/MapLibre), cutting the APK to ~1/4 size.
+        // Activate with: ./gradlew :app:assembleDebug -Parm64Only
+        if (project.hasProperty("arm64Only")) {
+            ndk { abiFilters += "arm64-v8a" }
+        }
     }
 
     buildTypes {
@@ -36,14 +43,16 @@ android {
     }
     buildFeatures {
         compose = true
+        // BuildConfig.VERSION_NAME / VERSION_CODE / APPLICATION_ID power the About page.
+        buildConfig = true
     }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.activity.compose)
-
+    implementation(libs.androidx.activity.compose)      
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -67,13 +76,22 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
+
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
     implementation(libs.androidx.datastore.preferences)
+
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
     implementation(libs.haze)
     implementation(libs.haze.materials)
@@ -83,6 +101,10 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.ui)
+
+     implementation(libs.webrtc.android)
+
+    implementation(libs.maplibre.android)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

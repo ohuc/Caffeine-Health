@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,7 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
+import com.uc.homehealth.ui.theme.MontserratFamily
 import com.uc.homehealth.ui.theme.customColors
 import com.uc.homehealth.data.HaFavorite
 
@@ -48,9 +49,10 @@ fun FavCard(
         Column(
             modifier = Modifier
                 .width(144.dp)
+                .height(150.dp)
                 .background(cs.surfaceContainerHigh, MaterialTheme.shapes.medium)
                 .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -89,16 +91,16 @@ fun FavCard(
             Column {
                 Text(
                     text = fav.name,
-                    fontFamily = InterFamily,
-                    fontWeight = FontWeight.Bold,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 13.sp,
                     letterSpacing = (-0.1).sp,
                     color = cs.onSurface,
                 )
                 Text(
                     text = fav.state,
-                    fontFamily = InterFamily,
-                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 10.sp,
                     color = cs.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),

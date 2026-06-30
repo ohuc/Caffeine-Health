@@ -51,6 +51,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
@@ -60,6 +61,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.EditCalendar
 import androidx.compose.material.icons.outlined.Flight
 import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.Place
@@ -70,6 +72,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -77,9 +82,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -119,13 +127,15 @@ import coil.compose.AsyncImage
 import com.uc.homehealth.R
 import com.uc.homehealth.data.HaAutomation
 import com.uc.homehealth.data.HaFlight
+import com.uc.homehealth.data.ScheduledFlightAdd
+import com.uc.homehealth.data.ScheduledFlightStatus
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
 import com.uc.homehealth.ui.theme.MontserratFamily
 import com.uc.homehealth.ui.theme.customColors
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.atan2
@@ -146,11 +156,14 @@ fun FlightSheetOverlay(
     flightAutomationIds: List<String> = emptyList(),
     allAutomations: List<HaAutomation> = emptyList(),
     isFlightRadar24Available: Boolean = true,
+    scheduledFlights: List<ScheduledFlightAdd> = emptyList(),
     hazeState: HazeState? = null,
     onDismiss: () -> Unit,
     onAddFlight: (String) -> Unit,
     onRemoveFlight: (HaFlight) -> Unit = {},
     onDismissFlightAddError: () -> Unit = {},
+    onScheduleFlight: (String, Long) -> Unit = { _, _ -> },
+    onCancelScheduledFlight: (String) -> Unit = {},
     onAddFlightAutomation: (String) -> Unit = {},
     onRemoveFlightAutomation: (String) -> Unit = {},
     onTriggerFlightAutomation: (String) -> Unit = {},
@@ -196,9 +209,12 @@ fun FlightSheetOverlay(
                         flights = flights,
                         isAddingFlight = isAddingFlight,
                         flightAddError = flightAddError,
+                        scheduledFlights = scheduledFlights,
                         onAddFlight = onAddFlight,
                         onRemoveFlight = onRemoveFlight,
                         onDismissError = onDismissFlightAddError,
+                        onScheduleFlight = onScheduleFlight,
+                        onCancelScheduledFlight = onCancelScheduledFlight,
                     )
                     FlightTab.Automations -> AutomationsTab(
                         flightAutomationIds = flightAutomationIds,
@@ -250,7 +266,7 @@ private fun InstallFlightRadar24Card() {
         Text(
             text = "The FlightRadar24 integration isn't installed on your Home Assistant. " +
                 "Install it to track flights from the dashboard.",
-            fontFamily = InterFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Medium,
             fontSize = 13.sp,
             lineHeight = 18.sp,
@@ -281,14 +297,14 @@ private fun InstallFlightRadar24Card() {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Get the FlightRadar24 integration",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
                     color = Color.White,
                 )
                 Text(
                     text = "Opens the install guide on GitHub",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Medium,
                     fontSize = 11.sp,
                     color = Color.White.copy(alpha = 0.85f),
@@ -338,6 +354,9 @@ private fun FlightTabBar(
                     containerColor = cs.surfaceContainerHigh,
                     contentColor = cs.onSurface,
                 ),
+                // Tighter than the ToggleButton default — at 1/3 sheet width the
+                // stock padding left "Automations" too little room and it wrapped.
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -348,11 +367,18 @@ private fun FlightTabBar(
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
+                    // Single line, shrink-to-fit: short labels render at 13sp, long ones
+                    // ("Automations") step down instead of wrapping mid-word.
                     Text(
                         text = tab.label,
-                        fontFamily = InterFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
+                        maxLines = 1,
+                        autoSize = TextAutoSize.StepBased(
+                            minFontSize = 9.sp,
+                            maxFontSize = 13.sp,
+                            stepSize = 0.25.sp,
+                        ),
                     )
                 }
             }
@@ -360,14 +386,18 @@ private fun FlightTabBar(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TrackingTab(
     flights: List<HaFlight>,
     isAddingFlight: Boolean,
     flightAddError: String?,
+    scheduledFlights: List<ScheduledFlightAdd>,
     onAddFlight: (String) -> Unit,
     onRemoveFlight: (HaFlight) -> Unit,
     onDismissError: () -> Unit,
+    onScheduleFlight: (String, Long) -> Unit,
+    onCancelScheduledFlight: (String) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val coroutineScope = rememberCoroutineScope()
@@ -390,6 +420,16 @@ private fun TrackingTab(
     // (AnimatedVisibility tears the OutlinedTextField down and re-creates it otherwise,
     // which would wipe whatever the user typed).
     var inputText by rememberSaveable { mutableStateOf("") }
+    // Epoch-day the user picked for a future-dated add; -1 = none (track now).
+    var pickedDay by rememberSaveable { mutableStateOf(-1L) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+
+    val submitFlight: (String) -> Unit = { q ->
+        val day = pickedDay
+        if (day > LocalDate.now().toEpochDay()) onScheduleFlight(q, day) else onAddFlight(q)
+        inputText = ""
+        pickedDay = -1L
+    }
 
     // Scrollable wrapper — when a flight is tracked, the carousel + input together
     // exceed the visible sheet area while the IME is open, so the user needs to
@@ -423,11 +463,14 @@ private fun TrackingTab(
                 color = cs.onSurface,
             )
         }
-        val countText = when {
+        val baseCount = when {
             flights.isEmpty() -> "No flights tracked yet"
             flights.size == 1 -> "1 flight tracked"
             else -> "${pagerState.currentPage + 1} / ${flights.size} tracked"
         }
+        val countText =
+            if (scheduledFlights.isEmpty()) baseCount
+            else "$baseCount · ${scheduledFlights.size} scheduled"
         AnimatedContent(
             targetState = countText,
             transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) },
@@ -435,7 +478,7 @@ private fun TrackingTab(
         ) { text ->
             Text(
                 text = text,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,
@@ -466,10 +509,10 @@ private fun TrackingTab(
             text = inputText,
             onTextChange = { inputText = it },
             isLoading = isAddingFlight,
-            onSubmit = { q ->
-                onAddFlight(q)
-                inputText = ""
-            },
+            pickedDay = pickedDay,
+            onPickDate = { showDatePicker = true },
+            onClearDate = { pickedDay = -1L },
+            onSubmit = submitFlight,
         )
     }
 
@@ -549,10 +592,47 @@ private fun TrackingTab(
                 text = inputText,
                 onTextChange = { inputText = it },
                 isLoading = isAddingFlight,
-                onSubmit = { q ->
-                    onAddFlight(q)
-                    inputText = ""
-                },
+                pickedDay = pickedDay,
+                onPickDate = { showDatePicker = true },
+                onClearDate = { pickedDay = -1L },
+                onSubmit = submitFlight,
+            )
+        }
+    }
+
+    // ── Scheduled queue — future-dated adds waiting on-device ─────────────
+    AnimatedVisibility(
+        visible = scheduledFlights.isNotEmpty(),
+        enter = expandVertically(animationSpec = tween(220)) + fadeIn(tween(220)),
+        exit = shrinkVertically(animationSpec = tween(180)) + fadeOut(tween(160)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(top = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "SCHEDULED",
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp,
+                letterSpacing = 1.2.sp,
+                color = cs.onSurfaceVariant,
+            )
+            scheduledFlights.forEach { entry ->
+                ScheduledAddRow(entry = entry, onCancel = { onCancelScheduledFlight(entry.id) })
+            }
+            Text(
+                text = "FlightRadar24 can't pre-book a date, so the track command is sent " +
+                    "on the flight's day. If that number flies more than once that day, " +
+                    "the first match gets tracked.",
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 10.sp,
+                lineHeight = 14.sp,
+                color = cs.onSurfaceVariant,
             )
         }
     }
@@ -560,6 +640,37 @@ private fun TrackingTab(
     // A little tail padding so the input doesn't sit flush with the IME gap.
     Spacer(modifier = Modifier.height(12.dp))
     } // end verticalScroll Column
+
+    // ── Future-date picker (today and earlier mean "track now") ───────────
+    if (showDatePicker) {
+        val todayEpochDay = remember { LocalDate.now().toEpochDay() }
+        val datePickerState = rememberDatePickerState(
+            // DatePicker works in UTC-midnight millis; epoch-day * 86_400_000 is exactly that.
+            initialSelectedDateMillis = (if (pickedDay >= 0) pickedDay else todayEpochDay + 1) * 86_400_000L,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                    utcTimeMillis / 86_400_000L >= todayEpochDay
+                override fun isSelectableYear(year: Int): Boolean = year >= LocalDate.now().year
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { ms ->
+                        val day = ms / 86_400_000L
+                        pickedDay = if (day > todayEpochDay) day else -1L
+                    }
+                    showDatePicker = false
+                }) { Text("Set date") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            },
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 }
 
 @Composable
@@ -583,7 +694,7 @@ private fun FlightAddErrorBanner(message: String, onDismiss: () -> Unit) {
         Spacer(modifier = Modifier.width(10.dp))
         Text(
             text = message,
-            fontFamily = InterFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 12.5.sp,
             lineHeight = 16.sp,
@@ -674,7 +785,7 @@ private fun LoadingFlightCard() {
         ContainedLoadingIndicator(modifier = Modifier.size(56.dp))
         Text(
             text = "Fetching flight…",
-            fontFamily = InterFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 13.sp,
             color = cs.onSurfaceVariant,
@@ -688,8 +799,13 @@ private fun AddFlightInput(
     text: String,
     onTextChange: (String) -> Unit,
     isLoading: Boolean,
+    pickedDay: Long,           // epoch-day for a future-dated add; -1 = track now
+    onPickDate: () -> Unit,
+    onClearDate: () -> Unit,
     onSubmit: (String) -> Unit,
 ) {
+    val cs = MaterialTheme.colorScheme
+    val accent = MaterialTheme.customColors.lavender
     val submit: () -> Unit = {
         val q = text.trim()
         if (q.isNotEmpty() && !isLoading) {
@@ -697,12 +813,14 @@ private fun AddFlightInput(
         }
     }
     val canSubmit = text.trim().isNotEmpty() && !isLoading
+    val hasDate = pickedDay >= 0
 
     // Bring this field into the scrollable viewport when it gains focus, so it
     // ends up just above the keyboard instead of clipped off the bottom of the sheet.
     val bringIntoView = remember { BringIntoViewRequester() }
     val coroutineScope = rememberCoroutineScope()
 
+    Column(modifier = Modifier.fillMaxWidth()) {
     OutlinedTextField(
         value = text,
         onValueChange = onTextChange,
@@ -720,7 +838,7 @@ private fun AddFlightInput(
         placeholder = {
             Text(
                 text = "Flight number, callsign, or registration",
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontSize = 13.sp,
             )
         },
@@ -740,24 +858,208 @@ private fun AddFlightInput(
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
-                FilledIconButton(
-                    onClick = submit,
-                    enabled = canSubmit,
-                    colors = IconButtonDefaults.filledIconButtonColors(),
-                    modifier = Modifier
-                        .padding(end = 6.dp)
-                        .size(36.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.Send,
-                        contentDescription = "Track this flight",
-                        modifier = Modifier.size(18.dp),
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Tap(onClick = onPickDate) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(if (hasDate) accent.copy(alpha = 0.22f) else Color.Transparent),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.EditCalendar,
+                                contentDescription = "Track on a future date",
+                                tint = if (hasDate) accent else cs.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(2.dp))
+                    FilledIconButton(
+                        onClick = submit,
+                        enabled = canSubmit,
+                        colors = IconButtonDefaults.filledIconButtonColors(),
+                        modifier = Modifier
+                            .padding(end = 6.dp)
+                            .size(36.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.Send,
+                            contentDescription = if (hasDate) "Schedule tracking" else "Track this flight",
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
         },
         colors = OutlinedTextFieldDefaults.colors(),
     )
+
+    // Future-date chip + the honest mechanics: FR24 has no date input, so the actual
+    // command is held on-device and sent on the chosen day.
+    AnimatedVisibility(
+        visible = hasDate,
+        enter = expandVertically(animationSpec = tween(200)) + fadeIn(tween(200)),
+        exit = shrinkVertically(animationSpec = tween(160)) + fadeOut(tween(120)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp)
+                .padding(top = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.18f))
+                    .padding(start = 12.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.EditCalendar,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(14.dp),
+                )
+                Text(
+                    text = if (pickedDay >= 0) LocalDate.ofEpochDay(pickedDay).format(ScheduledDayFormatter) else "",
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = cs.onSurface,
+                )
+                Tap(onClick = onClearDate) {
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = "Clear date",
+                            tint = cs.onSurfaceVariant,
+                            modifier = Modifier.size(13.dp),
+                        )
+                    }
+                }
+            }
+            Text(
+                text = "Nothing is tracked yet — the app sends the track command to " +
+                    "FlightRadar24 on that day and verifies it caught the right flight.",
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 10.5.sp,
+                lineHeight = 14.sp,
+                color = cs.onSurfaceVariant,
+            )
+        }
+    }
+    } // end Column
+}
+
+// ── Scheduled-add queue row ─────────────────────────────────────────────
+// One future-dated add waiting on-device. The copy is deliberately explicit about
+// the mechanics: FR24 only tracks "the nearest instance" of a number, so the real
+// command is sent on the target day and the result is then date-verified.
+@Composable
+private fun ScheduledAddRow(
+    entry: ScheduledFlightAdd,
+    onCancel: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val accent = MaterialTheme.customColors.lavender
+    val haptic = rememberAppHaptics()
+    val failed = entry.status == ScheduledFlightStatus.FAILED
+    val dayLabel = LocalDate.ofEpochDay(entry.targetEpochDay).format(ScheduledDayFormatter)
+    val subline = when (entry.status) {
+        ScheduledFlightStatus.PENDING ->
+            "Will be sent to FlightRadar24 on $dayLabel — not tracked until then"
+        ScheduledFlightStatus.SENT ->
+            entry.statusDetail ?: "Sent to FlightRadar24 — confirming it's the $dayLabel flight"
+        ScheduledFlightStatus.FAILED ->
+            entry.statusDetail ?: "Couldn't start tracking on $dayLabel"
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(cs.surfaceContainerHigh)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(if (failed) cs.errorContainer else accent.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.EditCalendar,
+                contentDescription = null,
+                tint = if (failed) cs.onErrorContainer else accent,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp, end = 8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = entry.query,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = cs.onSurface,
+                    maxLines = 1,
+                )
+                Text(
+                    text = dayLabel,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp,
+                    color = if (failed) cs.error else accent,
+                    maxLines = 1,
+                )
+            }
+            Text(
+                text = subline,
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 10.sp,
+                lineHeight = 13.sp,
+                color = if (failed) cs.error else cs.onSurfaceVariant,
+                maxLines = 3,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        Tap(onClick = {
+            haptic.confirm()
+            onCancel()
+        }) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(cs.surfaceContainerHighest),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = if (failed) "Dismiss" else "Cancel scheduled tracking for ${entry.query}",
+                    tint = cs.onSurfaceVariant,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        }
+    }
 }
 
 // ── Automations tab — shows added automations + picker panel ─────────────
@@ -858,7 +1160,7 @@ private fun AutomationsMainContent(
             Text(
                 text = if (addedAutomations.isEmpty()) "No automations added yet"
                 else "${addedAutomations.size} automation${if (addedAutomations.size == 1) "" else "s"} linked",
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 12.sp,
                 color = cs.onSurfaceVariant,
@@ -889,7 +1191,7 @@ private fun AutomationsMainContent(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (editMode) "Done" else "Edit",
-                            fontFamily = InterFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             color = if (editMode) cs.onPrimary else cs.onSurface,
@@ -939,7 +1241,7 @@ private fun AutomationsMainContent(
                     Column(modifier = Modifier.padding(start = 14.dp)) {
                         Text(
                             text = "Add Your Automations",
-                            fontFamily = InterFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
                             color = cs.onSurface,
@@ -1001,7 +1303,7 @@ private fun AutomationRow(
         ) {
             Text(
                 text = automation.friendlyName,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 color = cs.onSurface,
@@ -1115,7 +1417,7 @@ private fun AutomationPickerPanel(
             placeholder = {
                 Text(
                     text = "Search automations",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontSize = 13.sp,
                 )
             },
@@ -1142,7 +1444,7 @@ private fun AutomationPickerPanel(
             ) {
                 Text(
                     text = if (query.isBlank()) "All automations already added" else "No automations match \"$query\"",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontSize = 13.sp,
                     color = cs.onSurfaceVariant,
                 )
@@ -1187,7 +1489,7 @@ private fun AutomationPickerPanel(
                             ) {
                                 Text(
                                     text = automation.friendlyName,
-                                    fontFamily = InterFamily,
+                                    fontFamily = MontserratFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
                                     color = cs.onSurface,
@@ -1229,7 +1531,7 @@ private fun PlaceholderTab(text: String) {
     ) {
         Text(
             text = text,
-            fontFamily = InterFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp,
             color = cs.onSurfaceVariant,
@@ -1247,6 +1549,7 @@ private val AirlineFallbackInk = Color(0xFF1A1500)
 private val ScheduledTint = Color(0xFFFFC56B)
 
 private val TimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private val ScheduledDayFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, d MMM")
 
 @Composable
 private fun FlightCard(flight: HaFlight, onRemove: () -> Unit = {}) {
@@ -1328,7 +1631,7 @@ private fun FlightCard(flight: HaFlight, onRemove: () -> Unit = {}) {
                     AirlineBadge(monogram = derived.monogram)
                     Text(
                         text = derived.airlineSubline,
-                        fontFamily = InterFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 12.sp,
                         color = cs.onSurfaceVariant,
@@ -1374,7 +1677,7 @@ private fun FlightCard(flight: HaFlight, onRemove: () -> Unit = {}) {
                     if (derived.etaText.isNotEmpty()) {
                         Text(
                             text = derived.etaText,
-                            fontFamily = InterFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 10.5.sp,
                             color = cs.onSurfaceVariant,
@@ -1431,7 +1734,7 @@ private fun FlightCard(flight: HaFlight, onRemove: () -> Unit = {}) {
         ) {
             Text(
                 text = derived.aircraftLabel,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 11.sp,
                 color = cs.onSurfaceVariant,
@@ -1439,7 +1742,7 @@ private fun FlightCard(flight: HaFlight, onRemove: () -> Unit = {}) {
             )
             Text(
                 text = derived.footerRight,
-                fontFamily = InterFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 11.sp,
                 color = cs.onSurfaceVariant,
@@ -1550,7 +1853,7 @@ private fun ScheduledFlightCard(flight: HaFlight, onRemove: () -> Unit = {}) {
                     AirlineBadge(monogram = monogram)
                     Text(
                         text = subline,
-                        fontFamily = InterFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 12.sp,
                         color = cs.onSurfaceVariant,
@@ -1588,7 +1891,7 @@ private fun ScheduledFlightCard(flight: HaFlight, onRemove: () -> Unit = {}) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Awaiting departure",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 13.sp,
                     color = cs.onSurface,
@@ -1596,7 +1899,7 @@ private fun ScheduledFlightCard(flight: HaFlight, onRemove: () -> Unit = {}) {
                 )
                 Text(
                     text = "Live tracking begins when the aircraft is in the air.",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Normal,
                     fontSize = 11.sp,
                     color = cs.onSurfaceVariant,

@@ -21,7 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.uc.homehealth.ui.theme.InterFamily
+import com.uc.homehealth.ui.theme.MontserratFamily
 
 // Floating "Demo mode · Exit" pill anchored just above the BottomNavBar.
 // Tapping routes to Settings (which has the URL + token form). The banner
@@ -62,14 +62,14 @@ fun ExitDemoBanner(
                 Spacer(Modifier.size(8.dp))
                 Text(
                     text = "Demo mode",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
                 )
                 Spacer(Modifier.size(10.dp))
                 Text(
                     text = "·",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f),
@@ -77,7 +77,7 @@ fun ExitDemoBanner(
                 Spacer(Modifier.size(10.dp))
                 Text(
                     text = "Exit",
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
                 )

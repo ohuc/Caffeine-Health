@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -27,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uc.homehealth.ui.theme.InstrumentSerifFamily
-import com.uc.homehealth.ui.theme.InterFamily
+import com.uc.homehealth.ui.theme.MontserratFamily
 import com.uc.homehealth.ui.theme.Spacing
 
 /**
@@ -41,6 +42,7 @@ fun SettingsPageScaffold(
     title: String,
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
+    backLabel: String = "Settings",
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -57,28 +59,21 @@ fun SettingsPageScaffold(
             .padding(bottom = 130.dp),
     ) {
         if (onBack != null) {
-            Tap(onClick = onBack) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = Spacing.ml, end = Spacing.xl, top = 10.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Back",
-                        tint = cs.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Text(
-                        text = "Settings",
-                        fontFamily = InterFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp,
-                        color = cs.onSurfaceVariant,
-                    )
-                }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = Spacing.ml, end = Spacing.xl, top = 10.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                BackButton(onClick = onBack)
+                Text(
+                    text = backLabel,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = cs.onSurfaceVariant,
+                )
             }
         }
 
@@ -101,7 +96,7 @@ fun SettingsPageScaffold(
                 Spacer(Modifier.size(4.dp))
                 Text(
                     text = subtitle,
-                    fontFamily = InterFamily,
+                    fontFamily = MontserratFamily,
                     fontSize = 13.sp,
                     color = cs.onSurfaceVariant,
                 )
@@ -110,5 +105,36 @@ fun SettingsPageScaffold(
 
         content()
     }
+    }
+}
+
+/**
+ * Material 3 Expressive back affordance: the navigation-up arrow inside a circular
+ * filled-tonal container (secondaryContainer/onSecondaryContainer), the shape that
+ * replaced the bare top-app-bar arrow in the Expressive update. Wrapped in [Tap]
+ * so it inherits the app's spring press-scale and haptic. Use this for every
+ * "navigate up" control so they read identically across the app.
+ */
+@Composable
+fun BackButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "Back",
+) {
+    val cs = MaterialTheme.colorScheme
+    Tap(onClick = onClick, modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(cs.secondaryContainer, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                contentDescription = contentDescription,
+                tint = cs.onSecondaryContainer,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }

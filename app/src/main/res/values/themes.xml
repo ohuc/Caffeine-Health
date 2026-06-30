@@ -2,4 +2,19 @@
 <resources>
 
     <style name="Theme.HomeHealth" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!--
+        Android 12+ splash screen (via androidx.core:core-splashscreen). The launcher
+        activity boots into this theme; installSplashScreen() then swaps to
+        postSplashScreenTheme on the first frame. Branded "icon-in-circle" splash:
+        a white circle holding the taupe + sand Pulse House on the app's surface color.
+        Colours are resource refs with a -night variant so the splash matches the system
+        light/dark mode at cold start.
+    -->
+    <style name="Theme.HomeHealth.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/app_logo_glyph</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/splash_icon_circle</item>
+        <item name="postSplashScreenTheme">@style/Theme.HomeHealth</item>
+    </style>
 </resources>

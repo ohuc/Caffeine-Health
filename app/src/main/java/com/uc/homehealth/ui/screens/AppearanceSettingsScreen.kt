@@ -32,7 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.uc.homehealth.data.ThemeMode
 import com.uc.homehealth.ui.components.SettingsPageScaffold
 import com.uc.homehealth.ui.components.rememberAppHaptics
-import com.uc.homehealth.ui.theme.InterFamily
+import com.uc.homehealth.ui.theme.MontserratFamily
 import com.uc.homehealth.ui.theme.Spacing
 import com.uc.homehealth.ui.viewmodel.ThemeViewModel
 
@@ -99,14 +99,14 @@ internal fun AppearanceSettingsScreenContent(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Theme",
-                        fontFamily = InterFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         color = cs.onSurface,
                     )
                     Text(
                         text = "Choose how HomeHealth looks",
-                        fontFamily = InterFamily,
+                        fontFamily = MontserratFamily,
                         fontSize = 11.sp,
                         color = cs.onSurfaceVariant,
                         modifier = Modifier.padding(top = 2.dp),
@@ -142,8 +142,8 @@ internal fun AppearanceSettingsScreenContent(
                         Spacer(Modifier.size(6.dp))
                         Text(
                             text = option.label,
-                            fontFamily = InterFamily,
-                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = MontserratFamily,
+                            fontWeight = FontWeight.Medium,
                             fontSize = 13.sp,
                         )
                     }

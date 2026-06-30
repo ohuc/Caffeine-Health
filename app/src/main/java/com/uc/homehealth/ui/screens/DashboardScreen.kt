@@ -1,16 +1,19 @@
 package com.uc.homehealth.ui.screens
 
 import android.graphics.Color as AndroidColor
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.EaseIn
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -27,13 +30,13 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -67,6 +70,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -74,6 +78,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,6 +87,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -88,6 +95,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -101,6 +110,7 @@ import com.uc.homehealth.data.HaLight
 import com.uc.homehealth.data.HaScene
 import com.uc.homehealth.data.HaRoom
 import com.uc.homehealth.data.RoomWidget
+import com.uc.homehealth.data.WidgetSection
 import com.uc.homehealth.data.WsConnectionStatus
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -110,10 +120,14 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.zIndex
@@ -124,29 +138,36 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Air
 import androidx.compose.material.icons.outlined.PowerSettingsNew
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
+import com.uc.homehealth.ui.components.BackButton
 import com.uc.homehealth.ui.components.ClimateSheetOverlay
 import com.uc.homehealth.ui.components.ColorPickerSheetOverlay
+import com.uc.homehealth.ui.components.predictiveSheetTransform
 import com.uc.homehealth.ui.components.FavCard
+import com.uc.homehealth.ui.components.GlanceCard
+import com.uc.homehealth.ui.components.glanceInkOn
+import com.uc.homehealth.ui.components.SmartGlance
+import com.uc.homehealth.ui.components.rememberGlancePalette
+import com.uc.homehealth.ui.components.toCard
 import com.uc.homehealth.ui.components.LightTile
 import com.uc.homehealth.ui.components.PillToggle
 import com.uc.homehealth.ui.components.PillToggleSize
 import com.uc.homehealth.ui.components.RoomTile
 import com.uc.homehealth.ui.components.SceneTile
-import com.uc.homehealth.ui.components.SquigglySlider
+import com.uc.homehealth.ui.components.BrightnessSlider
 import com.uc.homehealth.ui.components.CameraWidgetTile
 import com.uc.homehealth.ui.components.SensorWidgetTile
 import com.uc.homehealth.ui.components.SwitchWidgetTile
@@ -154,12 +175,16 @@ import com.uc.homehealth.ui.components.Tap
 import com.uc.homehealth.ui.components.RollingNumberText
 import com.uc.homehealth.ui.components.haIconFor
 import androidx.compose.ui.text.TextStyle
-import com.uc.homehealth.ui.theme.InterFamily
-import com.uc.homehealth.ui.theme.InstrumentSerifFamily
 import com.uc.homehealth.ui.theme.MontserratFamily
+import com.uc.homehealth.ui.theme.InstrumentSerifFamily
+import com.uc.homehealth.ui.theme.CustomColors
 import com.uc.homehealth.ui.theme.Spacing
+import com.uc.homehealth.ui.theme.customColors
 import com.uc.homehealth.ui.viewmodel.DashboardUiState
 import com.uc.homehealth.ui.viewmodel.DashboardViewModel
+import com.uc.homehealth.ui.viewmodel.GlanceActivity
+import com.uc.homehealth.ui.viewmodel.GlanceSuggestion
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -175,19 +200,31 @@ fun DashboardScreen(
     onReorderScenes: (List<HaScene>) -> Unit = {},
     onRemoveFavorite: (String) -> Unit = {},
     onReorderFavorites: (List<HaFavorite>) -> Unit = {},
-    onHideRoom: (String) -> Unit = {},
-    onReorderRooms: (List<HaRoom>) -> Unit = {},
-    onShowRoomPicker: () -> Unit = {},
-    onEditRoomSensors: (HaRoom) -> Unit = {},
+    onEditGlance: () -> Unit = {},
+    onEditRooms: () -> Unit = {},
     onFlightsTap: () -> Unit = {},
     onReconnect: () -> Unit = {},
     onGoToSettings: () -> Unit = {},
+    onOpenActivity: () -> Unit = {},
+    onOpenPulse: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val glanceSuggestion by viewModel.glanceSuggestion.collectAsStateWithLifecycle()
+    val glanceActivity by viewModel.glanceActivity.collectAsStateWithLifecycle()
+    // Pulse report for the glance alert tier — its own ViewModel/flow, deliberately
+    // outside DashboardViewModel's maxed-out combine().
+    val pulseViewModel: com.uc.homehealth.ui.viewmodel.PulseViewModel = hiltViewModel()
+    val pulseState by pulseViewModel.uiState.collectAsStateWithLifecycle()
     DashboardScreenContent(
         uiState = uiState,
+        glanceSuggestion = glanceSuggestion,
+        glanceActivity = glanceActivity,
+        pulseReport = if (pulseState.isLoading) null else pulseState.report,
+        onPulseTap = onOpenPulse,
+        onActivityTap = onOpenActivity,
+        onGlanceTileTap = viewModel::onGlanceTileTap,
         isRefreshing = isRefreshing,
         onRefresh = viewModel::refresh,
         onRoomClick = onRoomClick,
@@ -200,10 +237,8 @@ fun DashboardScreen(
         onReorderScenes = onReorderScenes,
         onRemoveFavorite = onRemoveFavorite,
         onReorderFavorites = onReorderFavorites,
-        onHideRoom = onHideRoom,
-        onReorderRooms = onReorderRooms,
-        onShowRoomPicker = onShowRoomPicker,
-        onEditRoomSensors = onEditRoomSensors,
+        onEditGlance = onEditGlance,
+        onEditRooms = onEditRooms,
         onFlightsTap = onFlightsTap,
         onReconnect = onReconnect,
         onGoToSettings = onGoToSettings,
@@ -214,6 +249,12 @@ fun DashboardScreen(
 @Composable
 internal fun DashboardScreenContent(
     uiState: DashboardUiState,
+    glanceSuggestion: GlanceSuggestion? = null,
+    glanceActivity: GlanceActivity? = null,
+    pulseReport: com.uc.homehealth.data.PulseReport? = null,
+    onPulseTap: () -> Unit = {},
+    onActivityTap: () -> Unit = {},
+    onGlanceTileTap: (String) -> Unit = {},
     onRoomClick: (HaRoom) -> Unit,
     onFavClick: (HaFavorite) -> Unit,
     isRefreshing: Boolean = false,
@@ -226,64 +267,64 @@ internal fun DashboardScreenContent(
     onReorderScenes: (List<HaScene>) -> Unit = {},
     onRemoveFavorite: (String) -> Unit = {},
     onReorderFavorites: (List<HaFavorite>) -> Unit = {},
-    onHideRoom: (String) -> Unit = {},
-    onReorderRooms: (List<HaRoom>) -> Unit = {},
-    onShowRoomPicker: () -> Unit = {},
-    onEditRoomSensors: (HaRoom) -> Unit = {},
+    onEditGlance: () -> Unit = {},
+    onEditRooms: () -> Unit = {},
     onFlightsTap: () -> Unit = {},
     onReconnect: () -> Unit = {},
     onGoToSettings: () -> Unit = {},
 ) {
-    if (!uiState.isOnline) {
-        // During cold launch the combined flow may briefly hold the synchronous
-        // initial value (loaded=false, DISCONNECTED, !isLoggedIn). Show nothing
-        // until we actually know the user's auth/connection state — otherwise
-        // OfflineState ("Not connected" + top-anchored spinner) flashes for a
-        // few frames before the dashboard appears.
-        //
-        // Once loaded, only surface OfflineState for terminal/known-bad states:
-        //   - user truly isn't logged in, or
-        //   - WS has hit ERROR (auto-retry failed, sustained failure).
-        // Transient DISCONNECTED/CONNECTING while authed renders nothing too —
-        // the dashboard will appear as soon as the WS reaches READY and real
-        // data arrives.
-        val showOffline = uiState.loaded && (
-            !uiState.isLoggedIn ||
-            uiState.connectionStatus == WsConnectionStatus.ERROR
+    // Terminal/offline states get the dedicated OfflineState screen. Only surface it
+    // once we actually know the auth/connection state (uiState.loaded) and the WS is
+    // not online — for a logged-out user with no demo data, or a sustained WS ERROR
+    // (auto-retry exhausted). The loaded-guard avoids OfflineState flashing during the
+    // initial synchronous frame; transient DISCONNECTED/CONNECTING while authed falls
+    // through to the dashboard, which the skeleton overlay covers until data arrives.
+    val showOffline = !uiState.isOnline && uiState.loaded && (
+        !uiState.isLoggedIn ||
+        uiState.connectionStatus == WsConnectionStatus.ERROR
+    )
+    if (showOffline) {
+        OfflineState(
+            status = uiState.connectionStatus,
+            isLoggedIn = uiState.isLoggedIn,
+            onReconnect = onReconnect,
+            onGoToSettings = onGoToSettings,
         )
-        if (showOffline) {
-            OfflineState(
-                status = uiState.connectionStatus,
-                isLoggedIn = uiState.isLoggedIn,
-                onReconnect = onReconnect,
-                onGoToSettings = onGoToSettings,
-            )
-        } else {
-            // Bootstrap phase: WS handshake in progress. Show a centered spinner
-            // so the screen isn't silently blank while rooms/scenes load.
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                androidx.compose.material3.ContainedLoadingIndicator()
-            }
-        }
         return
     }
+
+    // The real dashboard renders inside this Box; a skeleton overlay (added at the end
+    // of the Box) sits on top during the first WS handshake and crossfades out once
+    // online. Rendering the content underneath the opaque skeleton means there's no
+    // jank/pop on load — the skeleton simply dissolves to reveal the populated
+    // dashboard already laid out in place.
+    Box(modifier = Modifier.fillMaxSize()) {
     val cs = MaterialTheme.colorScheme
     val scroll = rememberScrollState()
 
-    var roomsEditMode by remember { mutableStateOf(false) }
     var scenesEditMode by remember { mutableStateOf(false) }
     var favsEditMode by remember { mutableStateOf(false) }
-    LaunchedEffect(uiState.rooms.isEmpty()) { if (uiState.rooms.isEmpty()) roomsEditMode = false }
     LaunchedEffect(uiState.scenes.isEmpty()) { if (uiState.scenes.isEmpty()) scenesEditMode = false }
     LaunchedEffect(uiState.favorites.isEmpty()) { if (uiState.favorites.isEmpty()) favsEditMode = false }
 
+    val pullState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
     androidx.compose.material3.pulltorefresh.PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
+        state = pullState,
         modifier = Modifier.fillMaxWidth(),
+        indicator = {
+            // Push the spinner below the status bar / camera cutout — without this
+            // top inset it anchors at y=0 and spins under the notch (the scrolling
+            // content below already insets the same way).
+            androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator(
+                state = pullState,
+                isRefreshing = isRefreshing,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)),
+            )
+        },
     )  {
     Column(
         modifier = Modifier
@@ -314,12 +355,38 @@ internal fun DashboardScreenContent(
                     color = cs.onBackground,
                 )
             }
-            GlanceSubtitle(
-                template = uiState.glanceTemplate,
-                values = uiState.glanceValues,
-                modifier = Modifier.padding(top = 14.dp),
-            )
         }
+
+        // ─── At a glance (user-curated tiles) ────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = Spacing.xl, end = Spacing.xl, top = 2.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SectionLabel(text = "◐  At a glance")
+            SectionIconButton(icon = Icons.Outlined.Edit, contentDescription = "Edit tiles", onClick = onEditGlance)
+        }
+        // One self-curating surface: the hero is whatever matters most right now (an alert
+        // preempts it), pinned stats follow, then a live insight / delight. Tiles fade in
+        // and out as they become relevant or stop being. See rememberGlanceFeed below.
+        val glanceFeed = rememberGlanceFeed(
+            uiState = uiState,
+            suggestion = glanceSuggestion,
+            activity = glanceActivity,
+            pulse = pulseReport,
+            onRoomClick = onRoomClick,
+            onSceneTap = onSceneTap,
+            onActivityTap = onActivityTap,
+            onGlanceTileTap = onGlanceTileTap,
+            onPulseTap = onPulseTap,
+        )
+        SmartGlance(
+            cards = glanceFeed,
+            onAdd = onEditGlance,
+            modifier = Modifier.padding(horizontal = Spacing.ml),
+        )
 
         // ─── Rooms mosaic ────────────────────────────────────────────────────
         val cs = MaterialTheme.colorScheme
@@ -332,44 +399,11 @@ internal fun DashboardScreenContent(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SectionLabel(text = "🏡  Rooms")
-            AnimatedContent(
-                targetState = roomsEditMode,
-                transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(160)) },
-                label = "rooms_header",
-            ) { inEditMode ->
-                if (inEditMode) {
-                    EditPill(editMode = true, onToggle = { roomsEditMode = false })
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        AnimatedVisibility(
-                            visible = uiState.hiddenRooms.isNotEmpty(),
-                            enter = fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.7f),
-                            exit = fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.7f),
-                        ) {
-                            SectionIconButton(icon = Icons.Outlined.Add, contentDescription = "Add room", onClick = onShowRoomPicker)
-                        }
-                        AnimatedVisibility(
-                            visible = uiState.rooms.isNotEmpty(),
-                            enter = fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.7f),
-                            exit = fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.7f),
-                        ) {
-                            SectionIconButton(icon = Icons.Outlined.Edit, contentDescription = "Edit rooms", onClick = { roomsEditMode = true })
-                        }
-                    }
-                }
-            }
+            SectionIconButton(icon = Icons.Outlined.Edit, contentDescription = "Edit rooms", onClick = onEditRooms)
         }
 
         // ─── Rooms content ────────────────────────────────────────────────────
-        if (roomsEditMode) {
-            ReorderableRoomColumn(
-                rooms = uiState.rooms,
-                modifier = Modifier.padding(horizontal = Spacing.ml),
-                onReorderCommit = onReorderRooms,
-                onRemove = { onHideRoom(it.id) },
-                onEditSensors = onEditRoomSensors,
-            )
-        } else {
+        run {
             // Base rooms (always visible — first 4) + animated overflow
             val rowHeights = listOf(188.dp, 160.dp, 188.dp, 160.dp, 188.dp, 160.dp)
             val baseRooms = uiState.rooms.take(minOf(4, uiState.rooms.size))
@@ -385,12 +419,12 @@ internal fun DashboardScreenContent(
                     val right = rooms.filterIndexed { i, _ -> i % 2 == 1 }
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         left.forEachIndexed { i, room ->
-                            RoomTile(room = room, height = rowHeights.getOrElse(startRowIndex + i) { 160.dp }, onTap = { onRoomClick(room) })
+                            RoomTile(room = room, height = rowHeights.getOrElse(startRowIndex + i) { 160.dp }, onTap = { onRoomClick(room) }, showWarnings = uiState.showRoomWarnings)
                         }
                     }
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         right.forEachIndexed { i, room ->
-                            RoomTile(room = room, height = rowHeights.getOrElse(startRowIndex + i) { 160.dp }, onTap = { onRoomClick(room) })
+                            RoomTile(room = room, height = rowHeights.getOrElse(startRowIndex + i) { 160.dp }, onTap = { onRoomClick(room) }, showWarnings = uiState.showRoomWarnings)
                         }
                     }
                 }
@@ -416,14 +450,14 @@ internal fun DashboardScreenContent(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(cs.surfaceContainerHigh, RoundedCornerShape(16.dp))
+                            .background(cs.surfaceContainerHigh, MaterialTheme.shapes.small)
                             .padding(vertical = 11.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = if (uiState.showAllRooms) "Show less" else "Show all (${overflowRooms.size} more)",
-                            fontFamily = InterFamily,
-                            fontWeight = FontWeight.Bold,
+                            fontFamily = MontserratFamily,
+                            fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp,
                             color = cs.onSurfaceVariant,
                         )
@@ -552,6 +586,34 @@ internal fun DashboardScreenContent(
         }
     }
     }
+
+        // ─── Skeleton overlay ────────────────────────────────────────────────────
+        // Covers the dashboard during the first WS handshake, then crossfades out once
+        // online — revealing the real content that already rendered underneath, so the
+        // load reads as a smooth dissolve instead of a pop. Initialised from the
+        // current online state so it never flashes when we're already connected (demo
+        // mode, or returning to this tab); a transient WS drop won't bring it back.
+        var hasLoadedOnce by remember { mutableStateOf(uiState.isOnline) }
+        LaunchedEffect(uiState.isOnline) { if (uiState.isOnline) hasLoadedOnce = true }
+        // Re-cover the dashboard when a reconnect has actually WIPED the content (app
+        // resumed from background: WS states clear, rooms empty out) — otherwise the page
+        // flashes empty sections mid-reconnect. A transient drop that keeps data on screen
+        // still doesn't bring the skeleton back.
+        val reconnectWiped = !uiState.isOnline && uiState.rooms.isEmpty()
+        val skeletonAlpha by animateFloatAsState(
+            targetValue = if (!hasLoadedOnce || reconnectWiped) 1f else 0f,
+            animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+            label = "skeleton-crossfade",
+        )
+        if (skeletonAlpha > 0.004f) {
+            com.uc.homehealth.ui.components.DashboardSkeleton(
+                modifier = Modifier
+                    .matchParentSize()
+                    .alpha(skeletonAlpha)
+                    .background(cs.background),
+            )
+        }
+    }
 }
 
 @Composable
@@ -561,7 +623,7 @@ private fun FlightsPill(count: Int, onTap: () -> Unit) {
     Tap(onClick = { haptic.navigation(); onTap() }) {
         Row(
             modifier = Modifier
-                .background(cs.surfaceContainerHigh, RoundedCornerShape(999.dp))
+                .background(cs.surfaceContainerHigh, PillShape)
                 .padding(horizontal = 14.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -575,8 +637,8 @@ private fun FlightsPill(count: Int, onTap: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
                     text = "Flights",
-                    fontFamily = InterFamily,
-                    fontWeight = FontWeight.Bold,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 13.sp,
                     letterSpacing = (-0.1).sp,
                     color = cs.onSurface,
@@ -588,7 +650,7 @@ private fun FlightsPill(count: Int, onTap: () -> Unit) {
                         else -> "$count tracked"
                     },
                     fontFamily = MontserratFamily,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 10.sp,
                     color = cs.onSurface.copy(alpha = 0.65f),
                 )
@@ -662,7 +724,7 @@ private fun OfflineState(
             Text(
                 text = subtitle,
                 fontFamily = MontserratFamily,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 color = cs.onSurfaceVariant,
@@ -675,7 +737,7 @@ private fun OfflineState(
             ) {
                 Row(
                     modifier = Modifier
-                        .background(cs.primary, RoundedCornerShape(999.dp))
+                        .background(cs.primary, PillShape)
                         .padding(horizontal = 22.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -688,8 +750,8 @@ private fun OfflineState(
                     )
                     Text(
                         text = ctaLabel,
-                        fontFamily = InterFamily,
-                        fontWeight = FontWeight.Bold,
+                        fontFamily = MontserratFamily,
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp,
                         color = cs.onPrimary,
                     )
@@ -707,116 +769,15 @@ private fun OfflineState(
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
                 .padding(top = 24.dp),
             enter = slideInVertically(
-                animationSpec = tween(220),
+                animationSpec = offsetSpring(),
                 initialOffsetY = { -it * 2 },
             ) + fadeIn(animationSpec = tween(220)),
             exit = slideOutVertically(
-                animationSpec = tween(220),
+                animationSpec = offsetSpring(),
                 targetOffsetY = { -it * 2 },
             ) + fadeOut(animationSpec = tween(220)),
         ) {
             androidx.compose.material3.ContainedLoadingIndicator()
-        }
-    }
-}
-
-// ─── Inline-chip subtitle — matches shared.jsx InlineChip + dashboard.jsx greeting ──
-
-// Per-placeholder chip palette (kept consistent with the original prototype).
-private data class ChipStyle(val bg: Color, val fg: Color)
-
-@Composable
-private fun chipStyleFor(key: String): ChipStyle {
-    val cs = MaterialTheme.colorScheme
-    return when (key) {
-        "outside_temp", "inside_temp" -> ChipStyle(cs.onSurface, cs.background)
-        "doorbell"                    -> ChipStyle(cs.tertiaryContainer, cs.onTertiaryContainer)
-        "lights_on"                   -> ChipStyle(cs.secondaryContainer, cs.onSecondaryContainer)
-        "aqi"                         -> ChipStyle(cs.primaryContainer, cs.onPrimaryContainer)
-        else                          -> ChipStyle(cs.surfaceVariant, cs.onSurfaceVariant)
-    }
-}
-
-// Parses a template like "It is {outside_temp} outside" into ordered segments.
-private sealed class GlanceSegment {
-    data class TextSeg(val text: String) : GlanceSegment()
-    data class ChipSeg(val key: String) : GlanceSegment()
-}
-
-private fun parseGlanceTemplate(template: String): List<GlanceSegment> {
-    val regex = Regex("""\{([a-z_][a-z0-9_]*)\}""")
-    val result = mutableListOf<GlanceSegment>()
-    var cursor = 0
-    regex.findAll(template).forEach { match ->
-        if (match.range.first > cursor) {
-            result.add(GlanceSegment.TextSeg(template.substring(cursor, match.range.first)))
-        }
-        result.add(GlanceSegment.ChipSeg(match.groupValues[1]))
-        cursor = match.range.last + 1
-    }
-    if (cursor < template.length) result.add(GlanceSegment.TextSeg(template.substring(cursor)))
-    return result
-}
-
-// Default chip text when the entity ID is set but no state has arrived yet (or no ID configured).
-private fun displayValueFor(key: String, value: HaEntityValue?): String {
-    if (value == null) return when (key) {
-        "outside_temp", "inside_temp" -> "—°"
-        else -> "—"
-    }
-    val raw = value.state
-    return when (key) {
-        "outside_temp", "inside_temp" -> {
-            val n = raw.toFloatOrNull()
-            if (n != null) "${n.toInt()}°" else raw
-        }
-        else -> if (!value.unit.isNullOrBlank() && value.unit !in raw) "$raw ${value.unit}" else raw
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun GlanceSubtitle(
-    template: String,
-    values: Map<String, HaEntityValue?>,
-    modifier: Modifier = Modifier,
-) {
-    val cs = MaterialTheme.colorScheme
-    val segments = remember(template) { parseGlanceTemplate(template) }
-
-    FlowRow(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        itemVerticalAlignment = Alignment.CenterVertically,
-    ) {
-        segments.forEach { seg ->
-            when (seg) {
-                is GlanceSegment.TextSeg -> Text(
-                    text = seg.text,
-                    fontFamily = MontserratFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
-                    lineHeight = 29.sp,
-                    color = cs.onSurfaceVariant,
-                )
-                is GlanceSegment.ChipSeg -> {
-                    val style = chipStyleFor(seg.key)
-                    Box(
-                        modifier = Modifier
-                            .background(style.bg, RoundedCornerShape(999.dp))
-                            .padding(horizontal = 10.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = displayValueFor(seg.key, values[seg.key]),
-                            fontFamily = InterFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                            color = style.fg,
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -826,11 +787,15 @@ private fun GlanceSubtitle(
 // can control animation feel directly (stiffness → 120fps smooth settle).
 
 // internal so Navigation.kt can render it above BottomNavBar
-@OptIn(ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalHazeMaterialsApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun RoomSheetOverlay(
     room: HaRoom?,
     lights: List<HaLight>,
+    // Live HA connection status, so the sheet can explain a mid-session drop (lights
+    // vanishing) instead of leaving the user staring at an empty list. READY in demo.
+    connectionStatus: WsConnectionStatus = WsConnectionStatus.READY,
+    onReconnect: () -> Unit = {},
     climate: com.uc.homehealth.data.HaClimate? = null,
     tempHistory: List<Float> = emptyList(),
     widgets: List<RoomWidget> = emptyList(),
@@ -838,7 +803,10 @@ internal fun RoomSheetOverlay(
     widgetHistories: Map<String, List<Float>> = emptyMap(),
     widgetCameraSnapshots: Map<String, String?> = emptyMap(),
     widgetMediaStates: Map<String, com.uc.homehealth.data.HaMedia?> = emptyMap(),
+    widgetLocations: Map<String, com.uc.homehealth.data.HaPersonLocation?> = emptyMap(),
+    widgetClimateStates: Map<String, com.uc.homehealth.data.HaClimate?> = emptyMap(),
     showWidgetCatalog: Boolean = false,
+    showWarnings: Boolean = true,
     hazeState: HazeState? = null,
     onDismiss: () -> Unit,
     onToggle: (entityId: String, isOn: Boolean) -> Unit = { _, _ -> },
@@ -847,14 +815,27 @@ internal fun RoomSheetOverlay(
     onColorTempChange: (entityId: String, kelvin: Int) -> Unit = { _, _ -> },
     onClimateTargetChange: (entityId: String, temperature: Float) -> Unit = { _, _ -> },
     onClimateModeChange: (entityId: String, mode: String) -> Unit = { _, _ -> },
+    onClimateFanModeChange: (entityId: String, fanMode: String) -> Unit = { _, _ -> },
+    climateModeOrders: Map<String, List<String>> = emptyMap(),
+    onClimateModeOrderChange: (entityId: String, modes: List<String>) -> Unit = { _, _ -> },
+    climateFanOrders: Map<String, List<String>> = emptyMap(),
+    onClimateFanOrderChange: (entityId: String, fans: List<String>) -> Unit = { _, _ -> },
     onShowWidgetCatalog: () -> Unit = {},
     onHideWidgetCatalog: () -> Unit = {},
     onPickSwitchType: () -> Unit = {},
     onPickSensorType: () -> Unit = {},
     onPickCameraType: () -> Unit = {},
     onPickMediaType: () -> Unit = {},
+    onPickClimateType: () -> Unit = {},
+    onPickLocationType: () -> Unit = {},
+    onPickAirQualityType: () -> Unit = {},
+    // Section-scoped add affordances: the Media/Climate tab "Add" buttons open the
+    // matching entity picker directly (vs. the generic More catalog).
+    onAddMedia: () -> Unit = {},
+    onAddClimate: () -> Unit = {},
     onWidgetClick: (RoomWidget) -> Unit = {},
     onWidgetLongPress: (RoomWidget) -> Unit = {},
+    onPtzPress: (String) -> Unit = {},
     onRemoveWidget: (RoomWidget) -> Unit = {},
     onReorderWidgets: (List<RoomWidget>) -> Unit = {},
     mediaCallbacks: com.uc.homehealth.ui.components.MediaCardCallbacks = com.uc.homehealth.ui.components.MediaCardCallbacks(),
@@ -866,17 +847,47 @@ internal fun RoomSheetOverlay(
     var climateSheetClimate by remember(room?.id) { mutableStateOf<com.uc.homehealth.data.HaClimate?>(null) }
     // Local state for the color/temperature picker sheet that overlays this room sheet.
     var colorPickerLight by remember(room?.id) { mutableStateOf<HaLight?>(null) }
+    // Light-detail selection, hoisted out of RoomSheetContent so the single back
+    // handler below can pop it (return to overview) instead of dismissing the sheet.
+    // Reset only when a *different* room opens — keep it through the dismiss
+    // slide-out (when `room` is briefly null) so the panel doesn't flip to overview
+    // mid-animation.
+    var selectedLightId by remember { mutableStateOf<String?>(null) }
+    // Attention sub-panel (devices needing attention), pushed like the light detail.
+    var alertsShown by remember { mutableStateOf(false) }
+    LaunchedEffect(room?.id) { if (room != null) { selectedLightId = null; alertsShown = false } }
 
     val overlayHaptic = com.uc.homehealth.ui.components.rememberAppHaptics()
     val onDismissWithHaptic: () -> Unit = { overlayHaptic.confirm(); onDismiss() }
 
-    // Back gesture: dismiss any overlay sub-sheets first, otherwise dismiss the room sheet.
-    // Without this, the system back falls through and exits the app.
-    BackHandler(enabled = visible) {
-        when {
-            colorPickerLight != null -> colorPickerLight = null
-            climateSheetClimate != null -> climateSheetClimate = null
-            else -> onDismissWithHaptic()
+    // Back gesture: pop the deepest open sub-view first (color picker → climate →
+    // widget catalog → light detail), and only dismiss the whole room sheet once
+    // we're back at the overview. Without this, back falls through and exits the app.
+    // Registered only while open so it joins the back dispatcher in OPENING order —
+    // sheets opened on top register later and take the gesture first (see the
+    // predictive-back notes in AppBottomSheet.kt). The panel only tracks the gesture
+    // visually when back will dismiss the sheet; inner pops shouldn't drag the panel.
+    val roomBackProgress = remember { Animatable(0f) }
+    LaunchedEffect(visible) { if (visible) roomBackProgress.snapTo(0f) }
+    if (visible) {
+        PredictiveBackHandler { events ->
+            val dismissesSheet = colorPickerLight == null && climateSheetClimate == null &&
+                !showWidgetCatalog && selectedLightId == null && !alertsShown
+            try {
+                events.collect { event ->
+                    if (dismissesSheet) roomBackProgress.snapTo(event.progress)
+                }
+                when {
+                    colorPickerLight != null -> colorPickerLight = null
+                    climateSheetClimate != null -> climateSheetClimate = null
+                    showWidgetCatalog -> onHideWidgetCatalog()
+                    selectedLightId != null -> selectedLightId = null
+                    alertsShown -> alertsShown = false
+                    else -> onDismissWithHaptic()
+                }
+            } catch (_: CancellationException) {
+                roomBackProgress.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+            }
         }
     }
 
@@ -884,8 +895,8 @@ internal fun RoomSheetOverlay(
         // Scrim
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(tween(280, easing = EaseOut)),
-            exit = fadeOut(tween(380, easing = EaseIn)),
+            enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+            exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
             modifier = Modifier.matchParentSize(),
         ) {
             Box(
@@ -895,7 +906,7 @@ internal fun RoomSheetOverlay(
                         if (hazeState != null) Modifier.hazeEffect(state = hazeState, style = HazeMaterials.regular())
                         else Modifier
                     )
-                    .background(Color.Black.copy(alpha = 0.35f))
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.35f))
                     .clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
@@ -909,11 +920,11 @@ internal fun RoomSheetOverlay(
             visible = visible,
             enter = slideInVertically(
                 initialOffsetY = { it },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
             ),
             exit = slideOutVertically(
                 targetOffsetY = { it },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
             ),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
@@ -930,6 +941,7 @@ internal fun RoomSheetOverlay(
 
             Column(
                 modifier = Modifier
+                    .predictiveSheetTransform { roomBackProgress.value }
                     .fillMaxWidth()
                     .heightIn(max = screenHeight * 0.97f)
                     .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
@@ -962,7 +974,7 @@ internal fun RoomSheetOverlay(
                     Box(
                         modifier = Modifier
                             .size(width = 44.dp, height = 4.dp)
-                            .background(Color.White.copy(alpha = 0.30f), RoundedCornerShape(2.dp))
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), PillShape)
                     )
                 }
 
@@ -970,6 +982,8 @@ internal fun RoomSheetOverlay(
                     RoomSheetContent(
                         room = r,
                         externalLights = lights,
+                        connectionStatus = connectionStatus,
+                        onReconnect = onReconnect,
                         climate = climate,
                         tempHistory = tempHistory,
                         widgets = widgets,
@@ -977,7 +991,15 @@ internal fun RoomSheetOverlay(
                         widgetHistories = widgetHistories,
                         widgetCameraSnapshots = widgetCameraSnapshots,
                         widgetMediaStates = widgetMediaStates,
+                        widgetLocations = widgetLocations,
+                        widgetClimateStates = widgetClimateStates,
                         showWidgetCatalog = showWidgetCatalog,
+                        showWarnings = showWarnings,
+                        selectedLightId = selectedLightId,
+                        onSelectLight = { selectedLightId = it },
+                        alertsShown = alertsShown,
+                        onShowAlerts = { alertsShown = true },
+                        onHideAlerts = { alertsShown = false },
                         onDismiss = onDismissWithHaptic,
                         onToggle = onToggle,
                         onBrightnessChange = onBrightnessChange,
@@ -992,8 +1014,14 @@ internal fun RoomSheetOverlay(
                         onPickSensorType = onPickSensorType,
                         onPickCameraType = onPickCameraType,
                         onPickMediaType = onPickMediaType,
+                        onPickClimateType = onPickClimateType,
+                        onPickLocationType = onPickLocationType,
+                        onPickAirQualityType = onPickAirQualityType,
+                        onAddMedia = onAddMedia,
+                        onAddClimate = onAddClimate,
                         onWidgetClick = onWidgetClick,
                         onWidgetLongPress = onWidgetLongPress,
+                        onPtzPress = onPtzPress,
                         onRemoveWidget = onRemoveWidget,
                         onReorderWidgets = onReorderWidgets,
                         onOpenColorPicker = { l -> colorPickerLight = l },
@@ -1017,6 +1045,11 @@ internal fun RoomSheetOverlay(
             onDismiss = { climateSheetClimate = null },
             onTargetChange = onClimateTargetChange,
             onModeChange = onClimateModeChange,
+            onFanModeChange = onClimateFanModeChange,
+            modeOrders = climateModeOrders,
+            onModeOrderChange = onClimateModeOrderChange,
+            fanOrders = climateFanOrders,
+            onFanOrderChange = onClimateFanOrderChange,
         )
 
         // Color / temperature picker sheet — overlays the room sheet when the
@@ -1037,6 +1070,8 @@ internal fun RoomSheetOverlay(
 private fun RoomSheetContent(
     room: HaRoom,
     externalLights: List<HaLight>,
+    connectionStatus: WsConnectionStatus,
+    onReconnect: () -> Unit,
     climate: com.uc.homehealth.data.HaClimate?,
     tempHistory: List<Float>,
     widgets: List<RoomWidget>,
@@ -1044,7 +1079,15 @@ private fun RoomSheetContent(
     widgetHistories: Map<String, List<Float>>,
     widgetCameraSnapshots: Map<String, String?>,
     widgetMediaStates: Map<String, com.uc.homehealth.data.HaMedia?>,
+    widgetLocations: Map<String, com.uc.homehealth.data.HaPersonLocation?>,
+    widgetClimateStates: Map<String, com.uc.homehealth.data.HaClimate?>,
     showWidgetCatalog: Boolean,
+    showWarnings: Boolean,
+    selectedLightId: String?,
+    onSelectLight: (String?) -> Unit,
+    alertsShown: Boolean,
+    onShowAlerts: () -> Unit,
+    onHideAlerts: () -> Unit,
     onDismiss: () -> Unit,
     onToggle: (entityId: String, isOn: Boolean) -> Unit,
     onBrightnessChange: (entityId: String, brightness: Int) -> Unit,
@@ -1059,8 +1102,14 @@ private fun RoomSheetContent(
     onPickSensorType: () -> Unit,
     onPickCameraType: () -> Unit,
     onPickMediaType: () -> Unit,
+    onPickClimateType: () -> Unit,
+    onPickLocationType: () -> Unit,
+    onPickAirQualityType: () -> Unit,
+    onAddMedia: () -> Unit,
+    onAddClimate: () -> Unit,
     onWidgetClick: (RoomWidget) -> Unit,
     onWidgetLongPress: (RoomWidget) -> Unit,
+    onPtzPress: (String) -> Unit = {},
     onRemoveWidget: (RoomWidget) -> Unit,
     onReorderWidgets: (List<RoomWidget>) -> Unit,
     onOpenColorPicker: (HaLight) -> Unit,
@@ -1071,7 +1120,10 @@ private fun RoomSheetContent(
     val inkColor = try { Color(AndroidColor.parseColor(room.inkHex)) } catch (_: Exception) { cs.onPrimary }
 
     var selectedTab by remember(room.id) { mutableStateOf("Lights") }
-    var selectedLightId by remember(room.id) { mutableStateOf<String?>(null) }
+    // Which tab's section is currently in edit mode (null = none). Hoisted here so a
+    // long-press on a room tab can drop that section straight into edit mode, and so a
+    // normal tab tap exits it. Only ever equals the selected tab (or null).
+    var editTab by remember(room.id) { mutableStateOf<String?>(null) }
 
     // Per-entity intent overlay. Set whenever the user touches a light; overrides
     // the matching field of externalLights so HA's brightness-ramp state_changed
@@ -1135,6 +1187,7 @@ private fun RoomSheetContent(
     val sheetView: String = when {
         showWidgetCatalog -> "widget_catalog"
         selectedLightId != null -> "light_detail"
+        alertsShown && room.hasAlert -> "alerts"
         else -> "overview"
     }
 
@@ -1159,7 +1212,7 @@ private fun RoomSheetContent(
                 if (currentLight != null && currentLightId != null) {
                     LightDetailPanel(
                         light = currentLight,
-                        onBack = { selectedLightId = null },
+                        onBack = { onSelectLight(null) },
                         onToggle = {
                             val newIsOn = !currentLight.isOn
                             setIntent(currentLightId, INTENT_RELEASE_TTL_MS) {
@@ -1198,6 +1251,9 @@ private fun RoomSheetContent(
                     )
                 }
             }
+            "alerts" -> {
+                AlertsPanel(room = room, onBack = onHideAlerts)
+            }
             "widget_catalog" -> {
                 WidgetCatalogPanel(
                     accentColor = accentColor,
@@ -1207,6 +1263,9 @@ private fun RoomSheetContent(
                     onPickSensorType = onPickSensorType,
                     onPickCameraType = onPickCameraType,
                     onPickMediaType = onPickMediaType,
+                    onPickClimateType = onPickClimateType,
+                    onPickLocationType = onPickLocationType,
+                    onPickAirQualityType = onPickAirQualityType,
                 )
             }
             else -> {
@@ -1216,22 +1275,37 @@ private fun RoomSheetContent(
                     climate = climate,
                     accentColor = accentColor,
                     inkColor = inkColor,
+                    showWarnings = showWarnings,
+                    connectionStatus = connectionStatus,
+                    onReconnect = onReconnect,
                     selectedTab = selectedTab,
-                    onTabSelected = { selectedTab = it },
+                    // A plain tab tap exits edit mode — but guard against the long-press
+                    // race (the ToggleButton's click also fires on release): only clear
+                    // edit when switching to a DIFFERENT tab than the one just put in edit.
+                    onTabSelected = { if (it != editTab) editTab = null; selectedTab = it },
+                    onTabLongPress = { selectedTab = it; editTab = it },
+                    editTab = editTab,
+                    onEditTabChange = { editTab = it },
                     onDismiss = onDismiss,
+                    onShowAlerts = onShowAlerts,
                     tempHistory = tempHistory,
                     widgets = widgets,
                     widgetStates = widgetStates,
                     widgetHistories = widgetHistories,
                     widgetCameraSnapshots = widgetCameraSnapshots,
                     widgetMediaStates = widgetMediaStates,
-                    onLightSelect = { light -> selectedLightId = light.id },
+                    widgetLocations = widgetLocations,
+                    widgetClimateStates = widgetClimateStates,
+                    onLightSelect = { light -> onSelectLight(light.id) },
                     onClimateTargetChange = onClimateTargetChange,
                     onClimateModeChange = onClimateModeChange,
                     onClimateCardTap = onClimateCardTap,
                     onShowWidgetCatalog = onShowWidgetCatalog,
+                    onAddMedia = onAddMedia,
+                    onAddClimate = onAddClimate,
                     onWidgetClick = onWidgetClick,
                     onWidgetLongPress = onWidgetLongPress,
+                    onPtzPress = onPtzPress,
                     onRemoveWidget = onRemoveWidget,
                     onReorderWidgets = onReorderWidgets,
                     mediaCallbacks = mediaCallbacks,
@@ -1318,6 +1392,7 @@ private fun RoomTabButtonGroup(
     accentColor: Color,
     inkColor: Color,
     onTabSelected: (String) -> Unit,
+    onTabLongPress: (String) -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val haptic = com.uc.homehealth.ui.components.rememberAppHaptics()
@@ -1339,7 +1414,21 @@ private fun RoomTabButtonGroup(
             ToggleButton(
                 checked = isActive,
                 onCheckedChange = { if (!isActive) { haptic.navigation(); onTabSelected(tab) } },
-                modifier = Modifier.weight(1f),
+                // Hold a tab to jump into that section's edit mode. A parallel long-press
+                // detector that NEVER consumes the down, so the ToggleButton's own tap-to-
+                // select still fires normally (awaitLongPressOrCancellation is detection-only
+                // — unlike detectTapGestures, which consumes the press and breaks the toggle).
+                modifier = Modifier
+                    .weight(1f)
+                    .pointerInput(tab) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            if (awaitLongPressOrCancellation(down.id) != null) {
+                                haptic.editLongPress()
+                                onTabLongPress(tab)
+                            }
+                        }
+                    },
                 shapes = when (index) {
                     0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
                     tabs.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
@@ -1363,12 +1452,96 @@ private fun RoomTabButtonGroup(
                     )
                     Text(
                         text = tab,
-                        fontFamily = InterFamily,
-                        fontWeight = FontWeight.Bold,
+                        fontFamily = MontserratFamily,
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 12.sp,
                     )
                 }
             }
+        }
+    }
+}
+
+// ── Connection-lost banner ─────────────────────────────────────────────────────
+// Shown inside the room sheet whenever the live HA connection isn't READY. Mirrors
+// the attention-card styling (coral tint + badge). Tap (or the refresh affordance)
+// requests an immediate reconnect; while CONNECTING it shows a spinner instead.
+@Composable
+private fun RoomConnectionBanner(
+    status: WsConnectionStatus,
+    onReconnect: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val custom = MaterialTheme.customColors
+    val haptic = com.uc.homehealth.ui.components.rememberAppHaptics()
+    val connecting = status == WsConnectionStatus.CONNECTING
+    val (title, subtitle) = when (status) {
+        WsConnectionStatus.CONNECTING -> "Reconnecting…" to "Restoring the live connection."
+        WsConnectionStatus.AUTH_INVALID -> "Session expired" to "Sign in again to control devices."
+        WsConnectionStatus.IP_BANNED -> "Blocked by Home Assistant" to "This device's IP is temporarily banned."
+        else -> "Connection lost" to "Can't reach Home Assistant — controls may be stale."
+    }
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 10.dp)
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .background(custom.coral.copy(alpha = 0.12f))
+            .then(
+                if (!connecting) Modifier.clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                ) { haptic.navigation(); onReconnect() } else Modifier
+            )
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .background(custom.coral, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.CloudOff,
+                contentDescription = null,
+                tint = glanceInkOn(custom.coral),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                color = cs.onSurface,
+            )
+            Text(
+                text = subtitle,
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 11.sp,
+                color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(top = 1.dp),
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        if (connecting) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = custom.coral,
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Outlined.Refresh,
+                contentDescription = "Reconnect",
+                tint = cs.onSurface,
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
@@ -1380,18 +1553,30 @@ private fun RoomOverviewContent(
     climate: com.uc.homehealth.data.HaClimate?,
     accentColor: Color,
     inkColor: Color,
+    showWarnings: Boolean = true,
+    connectionStatus: WsConnectionStatus = WsConnectionStatus.READY,
+    onReconnect: () -> Unit = {},
     selectedTab: String,
     onTabSelected: (String) -> Unit,
+    onTabLongPress: (String) -> Unit = {},
+    editTab: String? = null,
+    onEditTabChange: (String?) -> Unit = {},
     onDismiss: () -> Unit,
+    onShowAlerts: () -> Unit = {},
     tempHistory: List<Float> = emptyList(),
     widgets: List<RoomWidget> = emptyList(),
     widgetStates: Map<String, HaEntityValue?> = emptyMap(),
     widgetHistories: Map<String, List<Float>> = emptyMap(),
     widgetCameraSnapshots: Map<String, String?> = emptyMap(),
     widgetMediaStates: Map<String, com.uc.homehealth.data.HaMedia?> = emptyMap(),
+    widgetLocations: Map<String, com.uc.homehealth.data.HaPersonLocation?> = emptyMap(),
+    widgetClimateStates: Map<String, com.uc.homehealth.data.HaClimate?> = emptyMap(),
     onShowWidgetCatalog: () -> Unit = {},
+    onAddMedia: () -> Unit = {},
+    onAddClimate: () -> Unit = {},
     onWidgetClick: (RoomWidget) -> Unit = {},
     onWidgetLongPress: (RoomWidget) -> Unit = {},
+    onPtzPress: (String) -> Unit = {},
     onRemoveWidget: (RoomWidget) -> Unit = {},
     onReorderWidgets: (List<RoomWidget>) -> Unit = {},
     mediaCallbacks: com.uc.homehealth.ui.components.MediaCardCallbacks = com.uc.homehealth.ui.components.MediaCardCallbacks(),
@@ -1411,6 +1596,7 @@ private fun RoomOverviewContent(
     onClimateCardTap: (com.uc.homehealth.data.HaClimate) -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
+    val haptic = com.uc.homehealth.ui.components.rememberAppHaptics()
     val tabs = listOf("Lights", "Climate", "Media", "More")
 
     Column(
@@ -1452,10 +1638,9 @@ private fun RoomOverviewContent(
                     text = buildString {
                         if (room.activeCount > 0) append("${room.activeCount} active · ")
                         append("${room.deviceCount} devices")
-                        if (room.hasAlert) append(" · ⚠ needs attention")
                     },
                     fontFamily = MontserratFamily,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 11.sp,
                     color = cs.onSurfaceVariant,
                 )
@@ -1477,14 +1662,82 @@ private fun RoomOverviewContent(
             }
         }
 
+        // ── Connection banner — only when the live HA link isn't READY. Without it,
+        // a mid-session drop just makes the light tiles vanish with no explanation.
+        if (connectionStatus != WsConnectionStatus.READY) {
+            RoomConnectionBanner(
+                status = connectionStatus,
+                onReconnect = onReconnect,
+            )
+        }
+
+        // ── Attention card — compact summary that pushes a dedicated detail panel
+        // (mirrors how a light card opens its detail view), instead of expanding inline.
+        if (room.hasAlert && showWarnings) {
+            val custom = MaterialTheme.customColors
+            val count = room.alerts.size
+            Tap(
+                onClick = { haptic.navigation(); onShowAlerts() },
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 10.dp)
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.large)
+                    .background(custom.coral.copy(alpha = 0.12f))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(custom.coral, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ErrorOutline,
+                            contentDescription = null,
+                            tint = glanceInkOn(custom.coral),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = if (count == 1) "1 device needs attention"
+                            else "$count devices need attention",
+                        fontFamily = MontserratFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        color = cs.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                        contentDescription = "View devices",
+                        tint = cs.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+        }
+
         // ── Env hero — sine wave fill (Phase 6: replace with live HA sensor data) ──
+        // Only shown when the room actually has a temperature/humidity sensor (or a
+        // user-set override). With neither resolved the repository leaves both null, so
+        // don't render a meaningless "0.0° · 0%" graph by default.
+        val roomTemp = room.temp
+        val roomHumidity = room.humidity
+        val hasEnvSensor = roomTemp != null || roomHumidity != null
+        if (hasEnvSensor) {
         Box(
             modifier = Modifier
                 .padding(horizontal = 16.dp)
                 .padding(top = 4.dp, bottom = 14.dp)
                 .fillMaxWidth()
                 .height(140.dp)
-                .clip(RoundedCornerShape(24.dp))
+                .clip(MaterialTheme.shapes.medium)
                 .background(cs.surfaceContainerHigh),
         ) {
             TempHistoryGraph(history = tempHistory, color = accentColor, modifier = Modifier.fillMaxSize())
@@ -1499,67 +1752,72 @@ private fun RoomOverviewContent(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.Bottom,
                 ) {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        RollingNumberText(
-                            text = "%.1f".format(room.temp),
-                            style = TextStyle(
-                                fontFamily = InstrumentSerifFamily,
-                                fontWeight = FontWeight.Normal,
-                                fontSize = 68.sp,
-                                lineHeight = 70.sp,
-                                color = cs.onSurface,
-                            ),
-                            labelPrefix = "hero_temp",
-                        )
-                        Text(
-                            text = "°",
-                            fontFamily = InstrumentSerifFamily,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 32.sp,
-                            color = cs.onSurface,
-                            modifier = Modifier.padding(bottom = 8.dp),
-                        )
-                    }
-                    Spacer(Modifier.weight(1f))
-                    Column(horizontalAlignment = Alignment.End) {
+                    if (roomTemp != null) {
                         Row(verticalAlignment = Alignment.Bottom) {
                             RollingNumberText(
-                                text = room.humidity.toString(),
+                                text = "%.1f".format(roomTemp),
                                 style = TextStyle(
                                     fontFamily = InstrumentSerifFamily,
                                     fontWeight = FontWeight.Normal,
-                                    fontSize = 22.sp,
-                                    color = cs.onSurfaceVariant,
+                                    fontSize = 68.sp,
+                                    lineHeight = 70.sp,
+                                    color = cs.onSurface,
                                 ),
-                                labelPrefix = "hero_humidity",
+                                labelPrefix = "hero_temp",
                             )
                             Text(
-                                text = "%",
+                                text = "°",
                                 fontFamily = InstrumentSerifFamily,
                                 fontWeight = FontWeight.Normal,
-                                fontSize = 14.sp,
-                                color = cs.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 2.dp),
+                                fontSize = 32.sp,
+                                color = cs.onSurface,
+                                modifier = Modifier.padding(bottom = 8.dp),
                             )
                         }
-                        Text(
-                            text = "HUMIDITY",
-                            fontFamily = MontserratFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 10.sp,
-                            letterSpacing = 0.6.sp,
-                            color = cs.onSurfaceVariant,
-                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (roomHumidity != null) {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                RollingNumberText(
+                                    text = roomHumidity.toString(),
+                                    style = TextStyle(
+                                        fontFamily = InstrumentSerifFamily,
+                                        fontWeight = FontWeight.Normal,
+                                        fontSize = 22.sp,
+                                        color = cs.onSurfaceVariant,
+                                    ),
+                                    labelPrefix = "hero_humidity",
+                                )
+                                Text(
+                                    text = "%",
+                                    fontFamily = InstrumentSerifFamily,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 14.sp,
+                                    color = cs.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 2.dp),
+                                )
+                            }
+                            Text(
+                                text = "HUMIDITY",
+                                fontFamily = MontserratFamily,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 10.sp,
+                                letterSpacing = 0.6.sp,
+                                color = cs.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
                 Text(
                     text = "Comfortable · holding steady",
                     fontFamily = MontserratFamily,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 11.sp,
                     color = cs.onSurfaceVariant,
                 )
             }
+        }
         }
 
         // ── Master control card ───────────────────────────────────────────────
@@ -1580,6 +1838,7 @@ private fun RoomOverviewContent(
             accentColor = accentColor,
             inkColor = inkColor,
             onTabSelected = onTabSelected,
+            onTabLongPress = onTabLongPress,
         )
 
         // ── Tab content: directional slide + animated height ─────────────────
@@ -1589,9 +1848,9 @@ private fun RoomOverviewContent(
                 val fromIndex = tabs.indexOf(initialState)
                 val toIndex = tabs.indexOf(targetState)
                 val goingRight = toIndex > fromIndex
-                (slideInHorizontally(tween(260)) { if (goingRight) it else -it } +
+                (slideInHorizontally(offsetSpring()) { if (goingRight) it else -it } +
                     fadeIn(tween(200))) togetherWith
-                (slideOutHorizontally(tween(260)) { if (goingRight) -it else it } +
+                (slideOutHorizontally(offsetSpring()) { if (goingRight) -it else it } +
                     fadeOut(tween(160))) using
                 SizeTransform { _, _ ->
                     spring(
@@ -1617,28 +1876,44 @@ private fun RoomOverviewContent(
                 )
                 "Climate" -> ClimateTabContent(
                     climate = climate,
+                    climateWidgets = widgets.filterIsInstance<RoomWidget.Climate>()
+                        .filter { it.section == WidgetSection.CLIMATE },
+                    climateStates = widgetClimateStates,
                     onTargetChange = onClimateTargetChange,
                     onModeChange = onClimateModeChange,
                     onCardTap = onClimateCardTap,
+                    onAddClimate = onAddClimate,
+                    onRemoveWidget = onRemoveWidget,
+                    editMode = editTab == tab,
+                    onEditModeChange = { on -> onEditTabChange(if (on) tab else null) },
                 )
                 "Media" -> MediaTabContent(
                     widgets = widgets,
                     widgetMediaStates = widgetMediaStates,
                     mediaCallbacks = mediaCallbacks,
-                    onAddWidget = onShowWidgetCatalog,
+                    onAddMedia = onAddMedia,
+                    onRemoveWidget = onRemoveWidget,
+                    editMode = editTab == tab,
+                    onEditModeChange = { on -> onEditTabChange(if (on) tab else null) },
                 )
                 "More" -> MoreTabContent(
-                    widgets = widgets,
+                    widgets = widgets.filter { it.section == WidgetSection.MORE },
                     widgetStates = widgetStates,
                     widgetHistories = widgetHistories,
                     widgetCameraSnapshots = widgetCameraSnapshots,
                     widgetMediaStates = widgetMediaStates,
+                    widgetLocations = widgetLocations,
+                    widgetClimateStates = widgetClimateStates,
                     onAddWidget = onShowWidgetCatalog,
                     onWidgetClick = onWidgetClick,
                     onWidgetLongPress = onWidgetLongPress,
+                    onClimateTap = onClimateCardTap,
+                    onPtzPress = onPtzPress,
                     onRemoveWidget = onRemoveWidget,
                     onReorderWidgets = onReorderWidgets,
                     mediaCallbacks = mediaCallbacks,
+                    editMode = editTab == tab,
+                    onEditModeChange = { on -> onEditTabChange(if (on) tab else null) },
                 )
                 else -> PlaceholderTabContent(tab = tab)
             }
@@ -1674,21 +1949,7 @@ private fun LightDetailPanel(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Tap(onClick = onBack) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(cs.surfaceVariant, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Back",
-                        tint = cs.onSurface,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
+            BackButton(onClick = onBack)
             Spacer(Modifier.width(14.dp))
             Text(
                 text = light.name,
@@ -1722,7 +1983,111 @@ private fun LightDetailPanel(
     }
 }
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
+// ─── Alerts panel ────────────────────────────────────────────────────────────
+// Pushed sub-view (mirrors the light-detail view) listing every device that needs
+// attention, one M3 card each, parsed into device name + reason. Flat surfaces,
+// coral accent — no inline expanding banner.
+
+@Composable
+private fun AlertsPanel(room: HaRoom, onBack: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val custom = MaterialTheme.customColors
+    val count = room.alerts.size
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        // Back button + title
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BackButton(onClick = onBack)
+            Spacer(Modifier.width(14.dp))
+            Column {
+                Text(
+                    text = "Needs attention",
+                    fontFamily = InstrumentSerifFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 24.sp,
+                    lineHeight = 26.sp,
+                    color = cs.onSurface,
+                )
+                Text(
+                    text = if (count == 1) "1 device in ${room.name}"
+                        else "$count devices in ${room.name}",
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 12.sp,
+                    color = cs.onSurfaceVariant,
+                )
+            }
+        }
+
+        // One card per device — "Name — reason" split into title + subtitle.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            room.alerts.forEach { alert ->
+                val parts = alert.split(" — ", limit = 2)
+                val name = parts.getOrNull(0)?.takeIf { it.isNotBlank() } ?: alert
+                val reason = (parts.getOrNull(1)?.takeIf { it.isNotBlank() } ?: "Needs attention")
+                    .replaceFirstChar { it.uppercase() }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.large)
+                        .background(cs.surfaceContainerHigh)
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .background(custom.coral.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ErrorOutline,
+                            contentDescription = null,
+                            tint = custom.coral,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = name,
+                            fontFamily = MontserratFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp,
+                            color = cs.onSurface,
+                        )
+                        Text(
+                            text = reason,
+                            fontFamily = MontserratFamily,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            color = cs.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
 @Composable
 private fun LightMasterCard(
     room: HaRoom,
@@ -1739,41 +2104,18 @@ private fun LightMasterCard(
     val activeLights = lights.filter { it.isOn && it.isAvailable }
     val masterOn = activeLights.isNotEmpty()
     val masterBri = if (masterOn) activeLights.map { it.brightness }.average().toInt() else 0
-    val hazeState = remember { HazeState() }
-    val glowAlpha by animateFloatAsState(
-        targetValue = if (masterOn) 0.22f + (masterBri / 100f) * 0.58f else 0f,
-        animationSpec = tween(durationMillis = 500),
-        label = "master_glow_alpha",
-    )
 
     Box(
         modifier = Modifier
             .padding(horizontal = 16.dp)
             .padding(bottom = 16.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp)),
+            .clip(MaterialTheme.shapes.medium)
+            .background(cs.surfaceContainerHigh),
     ) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(cs.surfaceContainerHigh)
-                .haze(state = hazeState),
-        ) {
-            Canvas(modifier = Modifier.align(Alignment.TopEnd).size(140.dp)) {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(accentColor.copy(alpha = glowAlpha), Color.Transparent),
-                        center = Offset(size.width, 0f),
-                        radius = size.width * 0.9f,
-                    ),
-                )
-            }
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .hazeChild(state = hazeState, style = HazeMaterials.ultraThin())
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -1786,8 +2128,8 @@ private fun LightMasterCard(
                 Box(
                     modifier = Modifier
                         .size(56.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(if (masterOn) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.03f)),
+                        .clip(MaterialTheme.shapes.small)
+                        .background(cs.onSurface.copy(alpha = if (masterOn) 0.06f else 0.03f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -1806,7 +2148,7 @@ private fun LightMasterCard(
                     Text(
                         text = "MASTER · ${room.name.uppercase()}",
                         fontFamily = MontserratFamily,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Medium,
                         fontSize = 11.sp,
                         letterSpacing = 0.6.sp,
                         color = cs.onSurfaceVariant,
@@ -1829,7 +2171,7 @@ private fun LightMasterCard(
                         Text(
                             text = "%",
                             fontFamily = MontserratFamily,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Medium,
                             fontSize = 14.sp,
                             color = cs.onSurfaceVariant,
                             modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
@@ -1845,32 +2187,21 @@ private fun LightMasterCard(
                     }
                 }
 
-                Box(contentAlignment = Alignment.Center) {
-                    Canvas(modifier = Modifier.size(96.dp)) {
-                        val haloAlpha = if (masterOn) 0.08f + (masterBri / 100f) * 0.52f else 0f
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(accentColor.copy(alpha = haloAlpha), Color.Transparent),
-                                radius = size.width * 0.5f,
-                            ),
-                            radius = size.width * 0.5f,
-                        )
-                    }
-                    PillToggle(
-                        isOn = masterOn,
-                        onToggle = { onMasterToggle(!masterOn) },
-                        color = accentColor,
-                        ink = inkColor,
-                        size = PillToggleSize.Lg,
-                    )
-                }
+                PillToggle(
+                    isOn = masterOn,
+                    onToggle = { onMasterToggle(!masterOn) },
+                    color = accentColor,
+                    ink = inkColor,
+                    size = PillToggleSize.Lg,
+                )
             }
 
-            SquigglySlider(
-                value = masterBri,
-                onValueChange = onMasterBrightness,
-                onValueChangeFinished = onMasterBrightnessFinished,
-                color = if (masterOn) accentColor else Color.White.copy(alpha = 0.18f),
+            BrightnessSlider(
+                brightness = masterBri,
+                enabled = masterOn,
+                accent = accentColor,
+                onBrightnessChange = onMasterBrightness,
+                onBrightnessChangeFinished = onMasterBrightnessFinished,
             )
         }
     }
@@ -1965,38 +2296,28 @@ private fun LightsTabContent(
 
     Column {
         if (availableLights.isNotEmpty()) {
-            val availRowCount = (availableLights.size + 1) / 2
-            val availTargetHeight = 154.dp * availRowCount + 10.dp * (availRowCount - 1).coerceAtLeast(0)
-            val availGridHeight by animateDpAsState(
-                targetValue = availTargetHeight,
-                animationSpec = tween(durationMillis = 280),
-                label = "availGridHeight",
-            )
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+            // A content-wrapping two-column grid (not a fixed-height LazyVerticalGrid)
+            // so tiles are never clipped — their intrinsic height drives the layout,
+            // and the parent AnimatedContent measures it exactly.
+            LightTileGrid(
+                lights = availableLights,
                 modifier = Modifier
                     .padding(horizontal = 16.dp)
-                    .height(availGridHeight),
-                contentPadding = PaddingValues(0.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                userScrollEnabled = false,
-            ) {
-                items(items = availableLights, key = { it.id }) { light ->
-                    LightTile(
-                        light = light,
-                        expanded = false,
-                        onExpand = { onLightSelect(light) },
-                        onToggle = { onToggle(light.id) },
-                        onBrightnessChange = { bri -> onBrightnessChange(light.id, bri) },
-                        onBrightnessChangeFinished = { bri -> onBrightnessChangeFinished(light.id, bri) },
-                        onColorChange = { r, g, b -> onColorChange(light.id, r, g, b) },
-                        onColorChangeFinished = { r, g, b -> onColorChangeFinished(light.id, r, g, b) },
-                        onColorTempChange = { k -> onColorTempChange(light.id, k) },
-                        onColorTempChangeFinished = { k -> onColorTempChangeFinished(light.id, k) },
-                        modifier = Modifier.animateItem(),
-                    )
-                }
+                    .animateContentSize(),
+            ) { light ->
+                LightTile(
+                    light = light,
+                    expanded = false,
+                    onExpand = { onLightSelect(light) },
+                    onToggle = { onToggle(light.id) },
+                    onBrightnessChange = { bri -> onBrightnessChange(light.id, bri) },
+                    onBrightnessChangeFinished = { bri -> onBrightnessChangeFinished(light.id, bri) },
+                    onColorChange = { r, g, b -> onColorChange(light.id, r, g, b) },
+                    onColorChangeFinished = { r, g, b -> onColorChangeFinished(light.id, r, g, b) },
+                    onColorTempChange = { k -> onColorTempChange(light.id, k) },
+                    onColorTempChangeFinished = { k -> onColorTempChangeFinished(light.id, k) },
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
 
@@ -2007,7 +2328,7 @@ private fun LightsTabContent(
                 onClick = { showUnavailable = !showUnavailable },
                 modifier = Modifier
                     .padding(start = 16.dp, end = 16.dp, top = 10.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(MaterialTheme.shapes.small)
                     .background(cs.surfaceContainerHigh)
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
@@ -2017,8 +2338,8 @@ private fun LightsTabContent(
                 ) {
                     Text(
                         text = if (showUnavailable) "Hide unavailable" else "${unavailableLights.size} unavailable",
-                        fontFamily = InterFamily,
-                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = MontserratFamily,
+                        fontWeight = FontWeight.Medium,
                         fontSize = 12.sp,
                         color = cs.onSurfaceVariant,
                     )
@@ -2036,38 +2357,45 @@ private fun LightsTabContent(
 
             AnimatedVisibility(
                 visible = showUnavailable,
-                enter = expandVertically(animationSpec = tween(220)) + fadeIn(tween(220)),
-                exit = shrinkVertically(animationSpec = tween(220)) + fadeOut(tween(220)),
+                enter = expandVertically(animationSpec = sizeSpring()) + fadeIn(tween(220)),
+                exit = shrinkVertically(animationSpec = sizeSpring()) + fadeOut(tween(220)),
             ) {
-                val unavailRowCount = ((unavailableLights.size + 1) / 2).coerceAtLeast(1)
-                val unavailTargetHeight = 154.dp * unavailRowCount + 10.dp * (unavailRowCount - 1).coerceAtLeast(0)
-                val unavailGridHeight by animateDpAsState(
-                    targetValue = unavailTargetHeight,
-                    animationSpec = tween(durationMillis = 280),
-                    label = "unavailGridHeight",
-                )
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier
-                        .padding(start = 16.dp, end = 16.dp, top = 10.dp)
-                        .height(unavailGridHeight),
-                    contentPadding = PaddingValues(0.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    userScrollEnabled = false,
-                ) {
-                    items(items = unavailableLights, key = { it.id }) { light ->
-                        LightTile(
-                            light = light,
-                            expanded = false,
-                            onExpand = {},
-                            onToggle = {},
-                            onBrightnessChange = {},
-                            onBrightnessChangeFinished = {},
-                            modifier = Modifier.animateItem(),
-                        )
-                    }
+                LightTileGrid(
+                    lights = unavailableLights,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp),
+                ) { light ->
+                    LightTile(
+                        light = light,
+                        expanded = false,
+                        onExpand = {},
+                        onToggle = {},
+                        onBrightnessChange = {},
+                        onBrightnessChangeFinished = {},
+                        modifier = Modifier.weight(1f),
+                    )
                 }
+            }
+        }
+    }
+}
+
+// Two-column grid that wraps its content height. Used instead of a fixed-height
+// LazyVerticalGrid (which clipped tiles taller than its per-row estimate). Rows
+// are laid out top-to-bottom; an odd final tile keeps its half-width via a spacer.
+@Composable
+private fun LightTileGrid(
+    lights: List<HaLight>,
+    modifier: Modifier = Modifier,
+    tile: @Composable RowScope.(HaLight) -> Unit,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        lights.chunked(2).forEach { rowLights ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                rowLights.forEach { light -> tile(light) }
+                if (rowLights.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }
@@ -2076,41 +2404,84 @@ private fun LightsTabContent(
 @Composable
 private fun ClimateTabContent(
     climate: com.uc.homehealth.data.HaClimate?,
+    climateWidgets: List<RoomWidget.Climate> = emptyList(),
+    climateStates: Map<String, com.uc.homehealth.data.HaClimate?> = emptyMap(),
     onTargetChange: (entityId: String, temperature: Float) -> Unit,
     onModeChange: (entityId: String, mode: String) -> Unit,
     onCardTap: (com.uc.homehealth.data.HaClimate) -> Unit = {},
+    onAddClimate: () -> Unit = {},
+    onRemoveWidget: (RoomWidget) -> Unit = {},
+    editMode: Boolean = false,
+    onEditModeChange: (Boolean) -> Unit = {},
 ) {
-    val cs = MaterialTheme.colorScheme
-    if (climate == null) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(120.dp)
-                .clip(RoundedCornerShape(22.dp))
-                .background(cs.surfaceContainerHigh),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "No climate device in this room",
-                fontFamily = MontserratFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp,
-                color = cs.onSurfaceVariant,
-            )
-        }
-        return
+    LaunchedEffect(climateWidgets.isEmpty()) {
+        if (climateWidgets.isEmpty() && editMode) onEditModeChange(false)
     }
 
+    // Empty = no area-detected climate AND no user-added card. Crossfade between the
+    // controls and the empty "add" card so the empty state eases in instead of popping.
+    val showEmpty = climate == null && climateWidgets.isEmpty()
+    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        AnimatedContent(
+            targetState = showEmpty,
+            transitionSpec = {
+                fadeIn(tween(260)) togetherWith fadeOut(tween(160)) using SizeTransform(clip = false)
+            },
+            label = "climate_section",
+        ) { isEmpty ->
+            if (isEmpty) {
+                AddSectionCard(
+                    icon = Icons.Outlined.Thermostat,
+                    title = "Add a climate device",
+                    subtitle = "Pick a climate entity to control it from here",
+                    onClick = onAddClimate,
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Edit pill — only when there are removable (user-added) climate cards.
+                    if (climateWidgets.isNotEmpty()) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            EditPill(editMode = editMode, onToggle = { onEditModeChange(!editMode) })
+                        }
+                    }
+                    // Area-detected climate (not user-added → never removable).
+                    climate?.let { ClimateControl(climate = it, onTargetChange = onTargetChange, onCardTap = onCardTap) }
+                    // User-added climate cards — removable in edit mode.
+                    RemovableWidgetColumn(
+                        widgets = climateWidgets,
+                        editMode = editMode,
+                        onRemove = onRemoveWidget,
+                    ) { widget ->
+                        val c = climateStates[(widget as RoomWidget.Climate).entityId]
+                        if (c != null) {
+                            ClimateControl(climate = c, onTargetChange = onTargetChange, onCardTap = onCardTap)
+                        } else {
+                            UnavailableWidgetCard(label = widget.entityId)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// One climate card + its target +/- stepper. Shared by the Climate tab (area-detected
+// and user-added cards) so they look and behave identically.
+@Composable
+private fun ClimateControl(
+    climate: com.uc.homehealth.data.HaClimate,
+    onTargetChange: (entityId: String, temperature: Float) -> Unit,
+    onCardTap: (com.uc.homehealth.data.HaClimate) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val cs = MaterialTheme.colorScheme
     // Optimistic local target — snaps back when HA confirms the new state.
     var localTarget by remember(climate.id, climate.targetTemp) {
         mutableStateOf(climate.targetTemp ?: 22f)
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         com.uc.homehealth.ui.components.ClimateCard(
@@ -2122,7 +2493,7 @@ private fun ClimateTabContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
+                .clip(MaterialTheme.shapes.medium)
                 .background(cs.surfaceContainerHigh)
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -2130,8 +2501,8 @@ private fun ClimateTabContent(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "ADJUST TARGET",
-                    fontFamily = InterFamily,
-                    fontWeight = FontWeight.Bold,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 10.sp,
                     letterSpacing = 0.6.sp,
                     color = cs.onSurfaceVariant,
@@ -2139,7 +2510,7 @@ private fun ClimateTabContent(
                 Text(
                     text = "Step ${"%.1f".format(climate.tempStep)}°",
                     fontFamily = MontserratFamily,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 11.sp,
                     color = cs.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
@@ -2157,7 +2528,6 @@ private fun ClimateTabContent(
                 onTargetChange(climate.id, next)
             }
         }
-
     }
 }
 
@@ -2178,8 +2548,8 @@ private fun StepperButton(
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
                 text = label,
-                fontFamily = InterFamily,
-                fontWeight = FontWeight.Bold,
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.SemiBold,
                 fontSize = 22.sp,
                 color = cs.onSurface,
             )
@@ -2194,14 +2564,14 @@ private fun PlaceholderTabContent(tab: String) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .height(120.dp)
-            .clip(RoundedCornerShape(22.dp))
+            .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = "$tab — coming in Phase 6",
             fontFamily = MontserratFamily,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -2209,88 +2579,259 @@ private fun PlaceholderTabContent(tab: String) {
 }
 
 // ─── Media tab ────────────────────────────────────────────────────────────────
-// Renders every RoomWidget.Media added to this room as a Hero MediaCard,
-// stacked vertically. If the room has no media widgets, shows a hint that
-// directs the user to the More tab's widget catalog.
+// Renders the MEDIA-section media widgets for this room as Hero MediaCards. Media
+// added here lives ONLY in this tab (not in More); the "Add a media player" button
+// opens the media picker scoped to the Media section. Empty state offers the Add card.
 
 @Composable
 private fun MediaTabContent(
     widgets: List<RoomWidget>,
     widgetMediaStates: Map<String, com.uc.homehealth.data.HaMedia?>,
     mediaCallbacks: com.uc.homehealth.ui.components.MediaCardCallbacks,
-    onAddWidget: () -> Unit,
+    onAddMedia: () -> Unit,
+    onRemoveWidget: (RoomWidget) -> Unit,
+    editMode: Boolean = false,
+    onEditModeChange: (Boolean) -> Unit = {},
 ) {
-    val cs = MaterialTheme.colorScheme
     val mediaWidgets = widgets.filterIsInstance<RoomWidget.Media>()
+        .filter { it.section == WidgetSection.MEDIA }
+    LaunchedEffect(mediaWidgets.isEmpty()) {
+        if (mediaWidgets.isEmpty() && editMode) onEditModeChange(false)
+    }
 
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (mediaWidgets.isEmpty()) {
-            Tap(onClick = onAddWidget, modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(cs.surfaceContainerHigh)
-                        .padding(horizontal = 18.dp, vertical = 18.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(cs.surfaceVariant),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.MusicNote,
-                            contentDescription = null,
-                            tint = cs.onSurface,
-                            modifier = Modifier.size(18.dp),
-                        )
+    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        // Crossfade + grow between the player list and the empty "add" card, so the empty
+        // state eases in after the last player is removed instead of popping.
+        AnimatedContent(
+            targetState = mediaWidgets.isEmpty(),
+            transitionSpec = {
+                fadeIn(tween(260)) togetherWith fadeOut(tween(160)) using SizeTransform(clip = false)
+            },
+            label = "media_section",
+        ) { isEmpty ->
+            if (isEmpty) {
+                AddSectionCard(
+                    icon = Icons.Outlined.MusicNote,
+                    title = "Add a media player",
+                    subtitle = "Pick a media_player entity to control it from here",
+                    onClick = onAddMedia,
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Edit pill — removal lives here since MEDIA-section media is hidden from More.
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        EditPill(editMode = editMode, onToggle = { onEditModeChange(!editMode) })
                     }
-                    Column(modifier = Modifier.padding(start = 14.dp)) {
-                        Text(
-                            text = "Add a media player",
-                            fontFamily = InterFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = cs.onSurface,
-                        )
-                        Text(
-                            text = "Pick a media_player entity to control it from here",
-                            fontFamily = MontserratFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 11.sp,
-                            color = cs.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 2.dp),
-                        )
+                    RemovableWidgetColumn(
+                        widgets = mediaWidgets,
+                        editMode = editMode,
+                        onRemove = onRemoveWidget,
+                    ) { widget ->
+                        val entityId = (widget as RoomWidget.Media).entityId
+                        val media = widgetMediaStates[entityId]
+                        if (media != null) {
+                            com.uc.homehealth.ui.components.MediaCardHero(
+                                media = media,
+                                onPlayPause = { mediaCallbacks.onPlayPause(entityId) },
+                                onSkipPrev = { mediaCallbacks.onSkipPrev(entityId) },
+                                onSkipNext = { mediaCallbacks.onSkipNext(entityId) },
+                                onToggleShuffle = { mediaCallbacks.onToggleShuffle(entityId, media.shuffleOn) },
+                                onCycleRepeat = { mediaCallbacks.onCycleRepeat(entityId, media.repeatMode) },
+                                onSeek = { progress -> mediaCallbacks.onSeek(entityId, progress) },
+                                onVolumeChange = { volume -> mediaCallbacks.onVolumeChange(entityId, volume) },
+                                onAnnounce = { mediaCallbacks.onAnnounce(entityId) },
+                                onSearchMusic = { mediaCallbacks.onSearchMusic(entityId) },
+                            )
+                        } else {
+                            UnavailableWidgetCard(label = entityId)
+                        }
                     }
                 }
             }
-            return
         }
+    }
+}
 
-        mediaWidgets.forEach { widget ->
-            val media = widgetMediaStates[widget.entityId] ?: return@forEach
-            com.uc.homehealth.ui.components.MediaCardHero(
-                media = media,
-                onPlayPause = { mediaCallbacks.onPlayPause(widget.entityId) },
-                onSkipPrev = { mediaCallbacks.onSkipPrev(widget.entityId) },
-                onSkipNext = { mediaCallbacks.onSkipNext(widget.entityId) },
-                onToggleShuffle = {
-                    mediaCallbacks.onToggleShuffle(widget.entityId, media.shuffleOn)
-                },
-                onCycleRepeat = {
-                    mediaCallbacks.onCycleRepeat(widget.entityId, media.repeatMode)
-                },
-                onOpenQueue = { mediaCallbacks.onOpenQueue(widget.entityId) },
-                onCast = { mediaCallbacks.onCast(widget.entityId) },
-                onSeek = { progress -> mediaCallbacks.onSeek(widget.entityId, progress) },
-                onVolumeChange = { volume -> mediaCallbacks.onVolumeChange(widget.entityId, volume) },
+// Empty-state "add" card shared by the Media and Climate tabs.
+@Composable
+private fun AddSectionCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    Tap(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
+                .background(cs.surfaceContainerHigh)
+                .padding(horizontal = 18.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(cs.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = cs.onSurface,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Column(modifier = Modifier.padding(start = 14.dp)) {
+                Text(
+                    text = title,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = cs.onSurface,
+                )
+                Text(
+                    text = subtitle,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 11.sp,
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+// Placeholder shown for a section widget whose live state hasn't resolved (or whose
+// entity is gone) — keeps the card present so it can still be removed in edit mode.
+@Composable
+private fun UnavailableWidgetCard(label: String) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(cs.surfaceContainerHigh)
+            .padding(horizontal = 18.dp, vertical = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column {
+            Text(
+                text = label,
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                color = cs.onSurface,
             )
+            Text(
+                text = "Unavailable",
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 11.sp,
+                color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
+
+// Edit-mode removable list (no drag-reorder), used by the Media and Climate tabs where
+// reordering across sections isn't supported. Tapping the ✕ plays the exit transition
+// then commits the removal — same visual language as ReorderableWidgetColumn.
+@Composable
+private fun RemovableWidgetColumn(
+    widgets: List<RoomWidget>,
+    editMode: Boolean,
+    onRemove: (RoomWidget) -> Unit,
+    content: @Composable (RoomWidget) -> Unit,
+) {
+    val haptic = rememberAppHaptics()
+    val exitingIds = remember { mutableStateMapOf<String, Boolean>() }
+    // Render from a local [order] rather than straight from `widgets`. The exit handler
+    // drops the tile from `order` the instant its shrink finishes — instead of waiting for
+    // the DataStore removal to round-trip. Otherwise clearing the exit flag flips
+    // AnimatedVisibility back to visible (the tile is still in upstream `widgets`) and
+    // replays the enter animation for a frame: the "removed, reappears, then vanishes"
+    // flicker. [pendingRemoval] keeps a just-removed tile dropped until upstream catches up.
+    val pendingRemoval = remember { mutableStateListOf<String>() }
+    var order by remember { mutableStateOf(widgets) }
+
+    LaunchedEffect(widgets) {
+        val upstream = widgets.associateBy { it.id }
+        pendingRemoval.retainAll { it in upstream }
+        val merged = buildList {
+            order.forEach { existing ->
+                when {
+                    existing.id in pendingRemoval -> Unit                  // awaiting upstream: stay dropped
+                    existing.id in upstream -> add(upstream.getValue(existing.id))
+                    exitingIds[existing.id] == true -> add(existing)       // mid-exit: keep until done
+                }
+            }
+            val have = map { it.id }.toSet()
+            widgets.forEach { if (it.id !in have && it.id !in pendingRemoval) add(it) }
+        }
+        if (merged != order) order = merged
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        order.forEach { widget ->
+            // Keyed by id so AnimatedVisibility/exit state follows the item, not its slot —
+            // otherwise removing a tile makes its neighbour replay the enter animation.
+            key(widget.id) {
+            val isExiting = exitingIds[widget.id] == true
+
+            LaunchedEffect(isExiting) {
+                if (isExiting) {
+                    kotlinx.coroutines.delay(WIDGET_EXIT_MS.toLong())
+                    pendingRemoval.add(widget.id)
+                    exitingIds.remove(widget.id)
+                    order = order.filterNot { it.id == widget.id }
+                    onRemove(widget)
+                }
+            }
+
+            AnimatedVisibility(
+                visible = !isExiting,
+                enter = fadeIn(tween(WIDGET_ENTER_MS)) + expandVertically(sizeSpring()),
+                exit = shrinkVertically(sizeSpring(Spring.StiffnessMedium)) +
+                    fadeOut(tween(WIDGET_EXIT_MS - 60)),
+            ) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    content(widget)
+
+                    if (editMode) {
+                        Tap(
+                            onClick = {
+                                if (exitingIds[widget.id] != true) {
+                                    haptic.confirm()
+                                    exitingIds[widget.id] = true
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.72f), CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription = "Remove widget",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            }
         }
     }
 }
@@ -2306,24 +2847,41 @@ private fun MoreTabContent(
     widgetHistories: Map<String, List<Float>>,
     widgetCameraSnapshots: Map<String, String?>,
     widgetMediaStates: Map<String, com.uc.homehealth.data.HaMedia?>,
+    widgetLocations: Map<String, com.uc.homehealth.data.HaPersonLocation?>,
+    widgetClimateStates: Map<String, com.uc.homehealth.data.HaClimate?> = emptyMap(),
     onAddWidget: () -> Unit,
     onWidgetClick: (RoomWidget) -> Unit,
     onWidgetLongPress: (RoomWidget) -> Unit,
+    onClimateTap: (com.uc.homehealth.data.HaClimate) -> Unit = {},
+    onPtzPress: (String) -> Unit = {},
     onRemoveWidget: (RoomWidget) -> Unit,
     onReorderWidgets: (List<RoomWidget>) -> Unit,
     mediaCallbacks: com.uc.homehealth.ui.components.MediaCardCallbacks,
+    editMode: Boolean = false,
+    onEditModeChange: (Boolean) -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val haptic = rememberAppHaptics()
-    var editMode by remember { mutableStateOf(false) }
 
     // Drop out of edit mode automatically once the user removes the last widget.
     LaunchedEffect(widgets.isEmpty()) {
-        if (widgets.isEmpty() && editMode) editMode = false
+        if (widgets.isEmpty() && editMode) onEditModeChange(false)
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            // Toggling edit mode hides/shows the "Add Your Widget" card, changing this
+            // column's height. The tab AnimatedContent's SizeTransform only fires on a
+            // tab switch, not on this in-tab change, so without this the sheet snaps to
+            // the new height. animateContentSize eases the shrink/grow instead.
+            .animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+            )
+            .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         // ── Edit / Done pill (only when there's something to edit) ────────────
@@ -2336,7 +2894,7 @@ private fun MoreTabContent(
                     editMode = editMode,
                     onToggle = {
                         if (editMode) haptic.tick() else haptic.confirm()
-                        editMode = !editMode
+                        onEditModeChange(!editMode)
                     },
                 )
             }
@@ -2388,6 +2946,21 @@ private fun MoreTabContent(
                         onClick = { onWidgetClick(widget) },
                         onLongPress = { onWidgetLongPress(widget) },
                         enabled = !editMode,
+                        ptz = widget.ptz,
+                        onPtzPress = onPtzPress,
+                    )
+                }
+                is RoomWidget.Location -> {
+                    val loc = widgetLocations[widget.entityId]
+                    val name = loc?.friendlyName ?: widget.entityId.substringAfterLast('.')
+                        .replace('_', ' ').replaceFirstChar { it.uppercase() }
+                    com.uc.homehealth.ui.components.LocationWidgetTile(
+                        name = name,
+                        subtitle = widget.entityId,
+                        location = loc,
+                        onClick = { onWidgetClick(widget) },
+                        onLongPress = { onWidgetLongPress(widget) },
+                        enabled = !editMode,
                     )
                 }
                 is RoomWidget.Media -> {
@@ -2404,12 +2977,31 @@ private fun MoreTabContent(
                             onCycleRepeat = {
                                 mediaCallbacks.onCycleRepeat(widget.entityId, media.repeatMode)
                             },
-                            onOpenQueue = { mediaCallbacks.onOpenQueue(widget.entityId) },
-                            onCast = { mediaCallbacks.onCast(widget.entityId) },
                             onSeek = { progress -> mediaCallbacks.onSeek(widget.entityId, progress) },
                             onVolumeChange = { volume -> mediaCallbacks.onVolumeChange(widget.entityId, volume) },
+                            onAnnounce = { mediaCallbacks.onAnnounce(widget.entityId) },
+                            onSearchMusic = { mediaCallbacks.onSearchMusic(widget.entityId) },
                         )
                     }
+                }
+                is RoomWidget.Climate -> {
+                    val climate = widgetClimateStates[widget.entityId]
+                    if (climate != null) {
+                        com.uc.homehealth.ui.components.ClimateCard(
+                            climate = climate,
+                            onTap = { onClimateTap(climate) },
+                        )
+                    } else {
+                        UnavailableWidgetCard(label = widget.entityId)
+                    }
+                }
+                is RoomWidget.AirQuality -> {
+                    com.uc.homehealth.ui.components.AirQualityWidget(
+                        baseState = widgetStates[widget.entityId],
+                        cleanState = widgetStates[widget.cleanDurationId],
+                        moderateState = widgetStates[widget.moderateDurationId],
+                        poorState = widgetStates[widget.poorDurationId],
+                    )
                 }
             }
         }
@@ -2420,7 +3012,7 @@ private fun MoreTabContent(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(22.dp))
+                        .clip(MaterialTheme.shapes.medium)
                         .background(cs.surfaceContainerHigh)
                         .padding(horizontal = 18.dp, vertical = 18.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -2442,15 +3034,15 @@ private fun MoreTabContent(
                     Column(modifier = Modifier.padding(start = 14.dp)) {
                         Text(
                             text = "Add Your Widget",
-                            fontFamily = InterFamily,
-                            fontWeight = FontWeight.Bold,
+                            fontFamily = MontserratFamily,
+                            fontWeight = FontWeight.SemiBold,
                             fontSize = 14.sp,
                             color = cs.onSurface,
                         )
                         Text(
                             text = if (widgets.isEmpty()) "Switches, sensor graphs, more coming soon" else "Add another widget to this room",
                             fontFamily = MontserratFamily,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Medium,
                             fontSize = 11.sp,
                             color = cs.onSurfaceVariant,
                             modifier = Modifier.padding(top = 2.dp),
@@ -2469,18 +3061,36 @@ private fun SectionIconButton(
     onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    Tap(onClick = onClick) {
+    val haptic = rememberAppHaptics()
+    // Material 3 Expressive filled-tonal icon button. The signature expressive move is
+    // the shape morph on press — a rounded square at rest springs to a full circle while
+    // held — paired with Tap's spring press-scale. We share Tap's interaction source so
+    // the corner radius can track the pressed state.
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val corner by animateDpAsState(
+        targetValue = if (pressed) 18.dp else 12.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "section_btn_corner",
+    )
+    Tap(
+        onClick = { haptic.navigation(); onClick() },
+        interactionSource = interaction,
+    ) {
         Box(
             modifier = Modifier
-                .size(30.dp)
-                .background(cs.surfaceContainerHigh, RoundedCornerShape(9.dp)),
+                .size(36.dp)
+                .background(cs.secondaryContainer, RoundedCornerShape(corner)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
-                tint = cs.onSurface,
-                modifier = Modifier.size(15.dp),
+                tint = cs.onSecondaryContainer,
+                modifier = Modifier.size(18.dp),
             )
         }
     }
@@ -2489,27 +3099,30 @@ private fun SectionIconButton(
 @Composable
 private fun EditPill(editMode: Boolean, onToggle: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Tap(onClick = onToggle) {
+    val haptic = rememberAppHaptics()
+    // Filled-tonal at rest, filled primary while editing — an expressive container-color
+    // shift that mirrors the section icon buttons. The toggle fires a clear on/off haptic.
+    Tap(onClick = { haptic.toggle(!editMode); onToggle() }) {
         Row(
             modifier = Modifier
                 .clip(PillShape)
-                .background(if (editMode) cs.primary else cs.surfaceContainerHigh)
+                .background(if (editMode) cs.primary else cs.secondaryContainer)
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = if (editMode) Icons.Outlined.Check else Icons.Outlined.Edit,
                 contentDescription = null,
-                tint = if (editMode) cs.onPrimary else cs.onSurface,
+                tint = if (editMode) cs.onPrimary else cs.onSecondaryContainer,
                 modifier = Modifier.size(14.dp),
             )
             Spacer(Modifier.width(6.dp))
             Text(
                 text = if (editMode) "Done" else "Edit",
-                fontFamily = InterFamily,
-                fontWeight = FontWeight.Bold,
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.SemiBold,
                 fontSize = 12.sp,
-                color = if (editMode) cs.onPrimary else cs.onSurface,
+                color = if (editMode) cs.onPrimary else cs.onSecondaryContainer,
             )
         }
     }
@@ -2525,6 +3138,15 @@ private fun EditPill(editMode: Boolean, onToggle: () -> Unit) {
 
 private const val WIDGET_EXIT_MS = 260
 private const val WIDGET_ENTER_MS = 220
+
+// M3 Expressive motion physics: spatial enter/exit rides springs; fades stay on tween.
+// Exits that are duration-coupled to a deferred removal delay (WIDGET_EXIT_MS /
+// HORIZ_EXIT_MS) use StiffnessMedium so the spring settles inside that window.
+private fun sizeSpring(stiffness: Float = Spring.StiffnessMediumLow) =
+    spring(stiffness = stiffness, visibilityThreshold = IntSize.VisibilityThreshold)
+
+private fun offsetSpring() =
+    spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold)
 
 @Composable
 private fun ReorderableWidgetColumn(
@@ -2557,6 +3179,9 @@ private fun ReorderableWidgetColumn(
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         order.forEach { widget ->
+            // Keyed by id so per-tile animation/drag state follows the item, not its slot —
+            // otherwise removing a tile makes its neighbour replay the enter animation.
+            key(widget.id) {
             val isDragged = draggedId == widget.id
             val isExiting = exitingIds[widget.id] == true
 
@@ -2603,8 +3228,8 @@ private fun ReorderableWidgetColumn(
 
             AnimatedVisibility(
                 visible = !isExiting,
-                enter = fadeIn(tween(WIDGET_ENTER_MS)) + expandVertically(tween(WIDGET_ENTER_MS, easing = FastOutSlowInEasing)),
-                exit = shrinkVertically(tween(WIDGET_EXIT_MS, easing = FastOutSlowInEasing)) +
+                enter = fadeIn(tween(WIDGET_ENTER_MS)) + expandVertically(sizeSpring()),
+                exit = shrinkVertically(sizeSpring(Spring.StiffnessMedium)) +
                     fadeOut(tween(WIDGET_EXIT_MS - 60)),
             ) {
                 Box(
@@ -2688,7 +3313,7 @@ private fun ReorderableWidgetColumn(
                             Box(
                                 modifier = Modifier
                                     .size(26.dp)
-                                    .background(Color.Black.copy(alpha = 0.72f), CircleShape),
+                                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.72f), CircleShape),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
@@ -2701,6 +3326,7 @@ private fun ReorderableWidgetColumn(
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -2720,6 +3346,9 @@ private fun WidgetCatalogPanel(
     onPickSensorType: () -> Unit,
     onPickCameraType: () -> Unit,
     onPickMediaType: () -> Unit,
+    onPickClimateType: () -> Unit,
+    onPickLocationType: () -> Unit,
+    onPickAirQualityType: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     Column(
@@ -2733,21 +3362,7 @@ private fun WidgetCatalogPanel(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Tap(onClick = onBack) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(cs.surfaceVariant, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Back",
-                        tint = cs.onSurface,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
+            BackButton(onClick = onBack)
             Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -2761,7 +3376,7 @@ private fun WidgetCatalogPanel(
                 Text(
                     text = "Pick a widget type",
                     fontFamily = MontserratFamily,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 11.sp,
                     color = cs.onSurfaceVariant,
                 )
@@ -2808,6 +3423,30 @@ private fun WidgetCatalogPanel(
                 inkColor = inkColor,
                 onClick = onPickMediaType,
             )
+            WidgetCatalogRow(
+                title = "Climate",
+                description = "Thermostat / AC card with mode, fan and target-temperature controls.",
+                icon = Icons.Outlined.Thermostat,
+                accentColor = accentColor,
+                inkColor = inkColor,
+                onClick = onPickClimateType,
+            )
+            WidgetCatalogRow(
+                title = "Location",
+                description = "Map a person's live location. Tap for a full interactive map.",
+                icon = Icons.Outlined.LocationOn,
+                accentColor = accentColor,
+                inkColor = inkColor,
+                onClick = onPickLocationType,
+            )
+            WidgetCatalogRow(
+                title = "Air quality",
+                description = "PM2.5 with VINDRIKTNING colours and a clean / moderate / poor time breakdown.",
+                icon = Icons.Outlined.Air,
+                accentColor = accentColor,
+                inkColor = inkColor,
+                onClick = onPickAirQualityType,
+            )
         }
 
         Spacer(Modifier.height(24.dp))
@@ -2828,7 +3467,7 @@ private fun WidgetCatalogRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
+                .clip(MaterialTheme.shapes.medium)
                 .background(cs.surfaceContainerHigh)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -2851,15 +3490,15 @@ private fun WidgetCatalogRow(
                 .padding(start = 14.dp)) {
                 Text(
                     text = title,
-                    fontFamily = InterFamily,
-                    fontWeight = FontWeight.Bold,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp,
                     color = cs.onSurface,
                 )
                 Text(
                     text = description,
                     fontFamily = MontserratFamily,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 11.sp,
                     color = cs.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
@@ -2897,6 +3536,8 @@ private fun ReorderableRoomColumn(
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         order.forEach { room ->
+            // Keyed by id so per-row animation/drag state follows the room, not its slot.
+            key(room.id) {
             val isDragged = draggedId == room.id
             val isExiting = exitingIds[room.id] == true
 
@@ -2931,8 +3572,8 @@ private fun ReorderableRoomColumn(
 
             AnimatedVisibility(
                 visible = !isExiting,
-                enter = fadeIn(tween(WIDGET_ENTER_MS)) + expandVertically(tween(WIDGET_ENTER_MS, easing = FastOutSlowInEasing)),
-                exit = shrinkVertically(tween(WIDGET_EXIT_MS, easing = FastOutSlowInEasing)) + fadeOut(tween(WIDGET_EXIT_MS - 60)),
+                enter = fadeIn(tween(WIDGET_ENTER_MS)) + expandVertically(sizeSpring()),
+                exit = shrinkVertically(sizeSpring(Spring.StiffnessMedium)) + fadeOut(tween(WIDGET_EXIT_MS - 60)),
             ) {
                 Box(
                     modifier = Modifier
@@ -2977,7 +3618,7 @@ private fun ReorderableRoomColumn(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(cs.surfaceContainerHigh, RoundedCornerShape(16.dp))
+                            .background(cs.surfaceContainerHigh, MaterialTheme.shapes.small)
                             .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -2989,10 +3630,10 @@ private fun ReorderableRoomColumn(
                             Icon(imageVector = haIconFor(room.icon), contentDescription = null, tint = ink, modifier = Modifier.size(18.dp))
                         }
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(room.name, fontFamily = InterFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cs.onSurface)
+                            Text(room.name, fontFamily = MontserratFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = cs.onSurface)
                             Text(
                                 "${room.deviceCount} device${if (room.deviceCount == 1) "" else "s"}",
-                                fontFamily = MontserratFamily, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = cs.onSurfaceVariant,
+                                fontFamily = MontserratFamily, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = cs.onSurfaceVariant,
                             )
                         }
                     }
@@ -3004,7 +3645,7 @@ private fun ReorderableRoomColumn(
                     ) {
                         Tap(onClick = { haptic.confirm(); onEditSensors(room) }) {
                             Box(
-                                modifier = Modifier.size(34.dp).background(Color.Black.copy(alpha = 0.72f), CircleShape),
+                                modifier = Modifier.size(34.dp).background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.72f), CircleShape),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(Icons.Outlined.Edit, contentDescription = "Edit room sensors", tint = Color.White, modifier = Modifier.size(17.dp))
@@ -3014,7 +3655,7 @@ private fun ReorderableRoomColumn(
                             onClick = { if (exitingIds[room.id] != true) { haptic.confirm(); exitingIds[room.id] = true } },
                         ) {
                             Box(
-                                modifier = Modifier.size(34.dp).background(Color.Black.copy(alpha = 0.72f), CircleShape),
+                                modifier = Modifier.size(34.dp).background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.72f), CircleShape),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(Icons.Outlined.Close, contentDescription = "Hide room", tint = Color.White, modifier = Modifier.size(18.dp))
@@ -3022,6 +3663,7 @@ private fun ReorderableRoomColumn(
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -3036,13 +3678,16 @@ private const val HORIZ_EXIT_MS = 260
 private const val HORIZ_ENTER_MS = 220
 
 @Composable
-private fun <T : Any> ReorderableHorizontalRow(
+internal fun <T : Any> ReorderableHorizontalRow(
     items: List<T>,
     key: (T) -> String,
     spacing: Dp,
     contentPadding: PaddingValues,
     onReorderCommit: (List<T>) -> Unit,
     onRemove: (T) -> Unit,
+    // Items reporting false get no remove badge (still draggable) — e.g. the mandatory
+    // Settings tab in the nav-bar editor.
+    removable: (T) -> Boolean = { true },
     content: @Composable (T) -> Unit,
 ) {
     val haptic = rememberAppHaptics()
@@ -3050,13 +3695,37 @@ private fun <T : Any> ReorderableHorizontalRow(
     val horizScroll = rememberScrollState()
 
     val widths = remember { mutableStateMapOf<String, Int>() }
-    var order by remember(items) { mutableStateOf(items) }
+    var order by remember { mutableStateOf(items) }
     var draggedId by remember { mutableStateOf<String?>(null) }
     var dragOffsetPx by remember { mutableStateOf(0f) }
     val exitingIds = remember { mutableStateMapOf<String, Boolean>() }
+    // Ids whose exit animation has finished and that we've dropped locally, but
+    // which upstream hasn't removed yet. Keeps a just-removed tile from flashing
+    // back when an unrelated emission lands during the prefs round-trip.
+    val pendingRemoval = remember { mutableStateListOf<String>() }
 
+    // Reconcile upstream `items` into the rendered `order` without disturbing an
+    // active drag or an in-flight exit animation: tiles mid-exit are kept until
+    // their animation finishes, newly added tiles are appended, and tiles dropped
+    // upstream disappear — but one we're still animating/awaiting stays put. Never
+    // keyed on `items`, so an unrelated emission can't reset order mid-animation.
     LaunchedEffect(items) {
-        if (draggedId == null && exitingIds.isEmpty()) order = items
+        if (draggedId != null) return@LaunchedEffect
+        val upstream = items.associateBy(key)
+        pendingRemoval.retainAll { it in upstream }
+        val merged = buildList {
+            order.forEach { existing ->
+                val id = key(existing)
+                when {
+                    id in pendingRemoval -> Unit                  // awaiting upstream: drop
+                    id in upstream -> add(upstream.getValue(id))  // present: latest content
+                    exitingIds[id] == true -> add(existing)       // animating out: keep
+                }
+            }
+            val have = map(key).toSet()
+            items.forEach { if (key(it) !in have && key(it) !in pendingRemoval) add(it) }
+        }
+        if (merged != order) order = merged
     }
 
     Row(
@@ -3067,129 +3736,140 @@ private fun <T : Any> ReorderableHorizontalRow(
     ) {
         order.forEach { item ->
             val id = key(item)
-            val isDragged = draggedId == id
-            val isExiting = exitingIds[id] == true
+            // Key each tile's subtree by identity, not loop position. When a tile is
+            // removed the list shrinks and the tiles after it slide down one slot;
+            // without this key Compose would hand the removed tile's (now invisible)
+            // AnimatedVisibility slot to the shifted tile, replaying its enter
+            // animation — the tile appears to vanish, flash back in, then vanish again.
+            androidx.compose.runtime.key(id) {
+                val isDragged = draggedId == id
+                val isExiting = exitingIds[id] == true
 
-            val translationX by animateFloatAsState(
-                targetValue = if (isDragged) dragOffsetPx else 0f,
-                label = "drag_x_$id",
-            )
+                val translationX by animateFloatAsState(
+                    targetValue = if (isDragged) dragOffsetPx else 0f,
+                    label = "drag_x_$id",
+                )
 
-            val phaseOffsetMs = remember(id) { ((id.hashCode() and Int.MAX_VALUE) % 440) }
-            val jiggleRaw by jiggleTransition.animateFloat(
-                initialValue = -0.55f,
-                targetValue = 0.55f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse,
-                    initialStartOffset = StartOffset(phaseOffsetMs),
-                ),
-                label = "horiz_jiggle_$id",
-            )
-            val rotation by animateFloatAsState(
-                targetValue = if (!isDragged && !isExiting) jiggleRaw else 0f,
-                animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing),
-                label = "horiz_jiggle_blend_$id",
-            )
+                val phaseOffsetMs = remember(id) { ((id.hashCode() and Int.MAX_VALUE) % 440) }
+                val jiggleRaw by jiggleTransition.animateFloat(
+                    initialValue = -0.55f,
+                    targetValue = 0.55f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse,
+                        initialStartOffset = StartOffset(phaseOffsetMs),
+                    ),
+                    label = "horiz_jiggle_$id",
+                )
+                val rotation by animateFloatAsState(
+                    targetValue = if (!isDragged && !isExiting) jiggleRaw else 0f,
+                    animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing),
+                    label = "horiz_jiggle_blend_$id",
+                )
 
-            LaunchedEffect(isExiting) {
-                if (isExiting) {
-                    kotlinx.coroutines.delay(HORIZ_EXIT_MS.toLong())
-                    onRemove(item)
-                    exitingIds.remove(id)
-                    order = order.filterNot { key(it) == id }
+                LaunchedEffect(isExiting) {
+                    if (isExiting) {
+                        kotlinx.coroutines.delay(HORIZ_EXIT_MS.toLong())
+                        // Mark pending and collapse the slot locally (the shrink has
+                        // already closed the gap) before telling upstream, so the
+                        // tile can't reappear while the prefs write round-trips.
+                        pendingRemoval.add(id)
+                        exitingIds.remove(id)
+                        order = order.filterNot { key(it) == id }
+                        onRemove(item)
+                    }
                 }
-            }
 
-            AnimatedVisibility(
-                visible = !isExiting,
-                enter = fadeIn(tween(HORIZ_ENTER_MS)),
-                exit = shrinkHorizontally(tween(HORIZ_EXIT_MS, easing = FastOutSlowInEasing)) +
-                    fadeOut(tween(HORIZ_EXIT_MS - 60)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .onGloballyPositioned { widths[id] = it.size.width }
-                        .zIndex(if (isDragged) 1f else 0f)
-                        .graphicsLayer {
-                            this.translationX = translationX
-                            this.rotationZ = rotation
-                        }
-                        .pointerInput(Unit) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = {
-                                    draggedId = id
-                                    dragOffsetPx = 0f
-                                    haptic.confirm()
-                                },
-                                onDragEnd = {
-                                    draggedId = null
-                                    dragOffsetPx = 0f
-                                    onReorderCommit(order)
-                                },
-                                onDragCancel = {
-                                    draggedId = null
-                                    dragOffsetPx = 0f
-                                },
-                                onDrag = { _, drag ->
-                                    dragOffsetPx += drag.x
-                                    val currentIndex = order.indexOfFirst { key(it) == id }
-                                    if (currentIndex < 0) return@detectDragGesturesAfterLongPress
-                                    val spacingPx = spacing.toPx()
-
-                                    if (dragOffsetPx < 0 && currentIndex > 0) {
-                                        val prev = order[currentIndex - 1]
-                                        val prevW = widths[key(prev)] ?: return@detectDragGesturesAfterLongPress
-                                        if (-dragOffsetPx > (prevW + spacingPx) / 2f) {
-                                            order = order.toMutableList().also {
-                                                it[currentIndex] = prev
-                                                it[currentIndex - 1] = item
-                                            }
-                                            dragOffsetPx += prevW + spacingPx
-                                            haptic.tick()
-                                        }
-                                    }
-                                    if (dragOffsetPx > 0 && currentIndex < order.lastIndex) {
-                                        val next = order[currentIndex + 1]
-                                        val nextW = widths[key(next)] ?: return@detectDragGesturesAfterLongPress
-                                        if (dragOffsetPx > (nextW + spacingPx) / 2f) {
-                                            order = order.toMutableList().also {
-                                                it[currentIndex] = next
-                                                it[currentIndex + 1] = item
-                                            }
-                                            dragOffsetPx -= nextW + spacingPx
-                                            haptic.tick()
-                                        }
-                                    }
-                                },
-                            )
-                        },
+                AnimatedVisibility(
+                    visible = !isExiting,
+                    enter = fadeIn(tween(HORIZ_ENTER_MS)),
+                    exit = shrinkHorizontally(sizeSpring(Spring.StiffnessMedium)) +
+                        fadeOut(tween(HORIZ_EXIT_MS - 60)),
                 ) {
-                    content(item)
-
-                    Tap(
-                        onClick = {
-                            if (exitingIds[id] != true) {
-                                haptic.confirm()
-                                exitingIds[id] = true
-                            }
-                        },
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp),
+                            .onGloballyPositioned { widths[id] = it.size.width }
+                            .zIndex(if (isDragged) 1f else 0f)
+                            .graphicsLayer {
+                                this.translationX = translationX
+                                this.rotationZ = rotation
+                            }
+                            .pointerInput(Unit) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        draggedId = id
+                                        dragOffsetPx = 0f
+                                        haptic.confirm()
+                                    },
+                                    onDragEnd = {
+                                        draggedId = null
+                                        dragOffsetPx = 0f
+                                        onReorderCommit(order)
+                                    },
+                                    onDragCancel = {
+                                        draggedId = null
+                                        dragOffsetPx = 0f
+                                    },
+                                    onDrag = { _, drag ->
+                                        dragOffsetPx += drag.x
+                                        val currentIndex = order.indexOfFirst { key(it) == id }
+                                        if (currentIndex < 0) return@detectDragGesturesAfterLongPress
+                                        val spacingPx = spacing.toPx()
+
+                                        if (dragOffsetPx < 0 && currentIndex > 0) {
+                                            val prev = order[currentIndex - 1]
+                                            val prevW = widths[key(prev)] ?: return@detectDragGesturesAfterLongPress
+                                            if (-dragOffsetPx > (prevW + spacingPx) / 2f) {
+                                                order = order.toMutableList().also {
+                                                    it[currentIndex] = prev
+                                                    it[currentIndex - 1] = item
+                                                }
+                                                dragOffsetPx += prevW + spacingPx
+                                                haptic.tick()
+                                            }
+                                        }
+                                        if (dragOffsetPx > 0 && currentIndex < order.lastIndex) {
+                                            val next = order[currentIndex + 1]
+                                            val nextW = widths[key(next)] ?: return@detectDragGesturesAfterLongPress
+                                            if (dragOffsetPx > (nextW + spacingPx) / 2f) {
+                                                order = order.toMutableList().also {
+                                                    it[currentIndex] = next
+                                                    it[currentIndex + 1] = item
+                                                }
+                                                dragOffsetPx -= nextW + spacingPx
+                                                haptic.tick()
+                                            }
+                                        }
+                                    },
+                                )
+                            },
                     ) {
-                        Box(
+                        content(item)
+
+                        if (removable(item)) Tap(
+                            onClick = {
+                                if (exitingIds[id] != true) {
+                                    haptic.confirm()
+                                    exitingIds[id] = true
+                                }
+                            },
                             modifier = Modifier
-                                .size(22.dp)
-                                .background(Color.Black.copy(alpha = 0.72f), CircleShape),
-                            contentAlignment = Alignment.Center,
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp),
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Close,
-                                contentDescription = "Remove",
-                                tint = Color.White,
-                                modifier = Modifier.size(12.dp),
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.72f), CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription = "Remove",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -3212,5 +3892,156 @@ private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
         color = MaterialTheme.colorScheme.onBackground,
         modifier = modifier,
     )
+}
+
+// ─── Self-curating "At a glance" feed ─────────────────────────────────────────
+// Builds the single prioritized card list for [SmartGlance] from the dashboard state
+// already in hand (no extra flows → no pressure on the maxed-out combine()). Order:
+//   1) ALERT   — a room HA flags as needing attention (filled accent; preempts the hero)
+//   2) PINNED  — the user's chosen entity tiles, in their order (the "stats")
+//   3) INSIGHT — how alive the home is right now (devices on), or a calm "all clear"
+//   4) DELIGHT — whole-home temperature ("oh wow" aggregate)
+// Items only appear when relevant, so the surface reshapes itself as the home changes:
+// an alert clears and drops out, "all quiet" gives way to "active" once a light turns on.
+@Composable
+private fun rememberGlanceFeed(
+    uiState: DashboardUiState,
+    suggestion: GlanceSuggestion?,
+    activity: GlanceActivity?,
+    pulse: com.uc.homehealth.data.PulseReport?,
+    onRoomClick: (HaRoom) -> Unit,
+    onSceneTap: (String) -> Unit,
+    onActivityTap: () -> Unit,
+    onGlanceTileTap: (String) -> Unit,
+    onPulseTap: () -> Unit,
+): List<GlanceCard> {
+    val c = MaterialTheme.customColors
+    val palette = rememberGlancePalette()
+    return remember(uiState.glanceTiles, uiState.rooms, uiState.showRoomWarnings, uiState.smartGlanceEnabled, suggestion, activity, pulse, c, palette) {
+        buildGlanceFeed(uiState, suggestion, activity, pulse, palette, c, onRoomClick, onSceneTap, onActivityTap, onGlanceTileTap, onPulseTap)
+    }
+}
+
+private fun buildGlanceFeed(
+    uiState: DashboardUiState,
+    suggestion: GlanceSuggestion?,
+    activity: GlanceActivity?,
+    pulse: com.uc.homehealth.data.PulseReport?,
+    palette: List<Color>,
+    c: CustomColors,
+    onRoomClick: (HaRoom) -> Unit,
+    onSceneTap: (String) -> Unit,
+    onActivityTap: () -> Unit,
+    onGlanceTileTap: (String) -> Unit,
+    onPulseTap: () -> Unit,
+): List<GlanceCard> {
+    val rooms = uiState.rooms
+    val smart = uiState.smartGlanceEnabled
+    val cards = mutableListOf<GlanceCard>()
+
+    // 1) ALERT — rooms HA flags as needing attention (only when warnings + smart cards on).
+    val attention = if (smart && uiState.showRoomWarnings) rooms.filter { it.hasAlert } else emptyList()
+    if (attention.isNotEmpty()) {
+        val first = attention.first()
+        cards += GlanceCard(
+            key = "smart.alert",
+            icon = "pulse",
+            name = if (attention.size == 1) "Needs attention" else "${attention.size} rooms need attention",
+            featuredValue = first.name,
+            miniValue = if (attention.size == 1) first.name else "${attention.size} rooms",
+            accent = c.coral,
+            filled = true,
+            onTap = { onRoomClick(first) },
+        )
+    }
+
+    // 1.25) PULSE — the home's own health, only when degraded (below the Healthy band).
+    // Filled like an alert so it preempts the hero; tap opens the full Pulse report.
+    if (smart && pulse != null && pulse.grade != com.uc.homehealth.data.PulseGrade.HEALTHY) {
+        cards += GlanceCard(
+            key = "smart.pulse",
+            icon = "pulse",
+            name = "Home score",
+            featuredValue = "${pulse.score}/100",
+            miniValue = "${pulse.score}/100",
+            accent = if (pulse.grade == com.uc.homehealth.data.PulseGrade.NEEDS_CARE) c.coral else c.warn,
+            filled = true,
+            onTap = onPulseTap,
+        )
+    }
+
+    // 1.5) SUGGESTION — a scene the user usually runs about now, learned on-device. Sits
+    // just below alerts so it becomes the hero when nothing needs attention; tap runs it.
+    if (smart && suggestion != null) {
+        cards += GlanceCard(
+            key = "smart.suggestion",
+            icon = "sparkle",
+            name = "Usually now",
+            featuredValue = suggestion.name,
+            miniValue = suggestion.name,
+            accent = c.lavender,
+            onTap = { onSceneTap(suggestion.sceneId) },
+        )
+    }
+
+    // 2) ACTIVITY — the latest thing that just happened, when fresh + not ignored (decided
+    // upstream by the learning rule). Placed BEFORE pinned tiles so it's actually visible
+    // on the first page (one hero + three) instead of being pushed onto a later carousel
+    // page; tap opens the full activity feed.
+    if (smart && activity != null) {
+        cards += GlanceCard(
+            key = "card:activity",
+            icon = activity.iconKey,
+            name = activity.relative,
+            featuredValue = activity.title,
+            miniValue = activity.title,
+            accent = c.cyan,
+            onTap = onActivityTap,
+        )
+    }
+
+    // 3) PINNED stats — the user's chosen entities, in their order. Tapping a tile opens
+    // that entity's controls (light/climate sheet) or toggles it, via onGlanceTileTap.
+    uiState.glanceTiles.forEachIndexed { i, tile ->
+        cards += tile.toCard(palette[i % palette.size], onTap = { onGlanceTileTap(tile.entityId) })
+    }
+
+    // 4) INSIGHT — devices on across the home, or a calm "all clear" when nothing's on.
+    val onCount = rooms.sumOf { it.activeCount }
+    if (smart && onCount > 0) {
+        cards += GlanceCard(
+            key = "smart.active",
+            icon = "bulb",
+            name = "Active now",
+            featuredValue = "$onCount",
+            miniValue = if (onCount == 1) "1 on" else "$onCount on",
+            accent = c.sky,
+        )
+    } else if (smart && rooms.isNotEmpty() && attention.isEmpty()) {
+        cards += GlanceCard(
+            key = "smart.quiet",
+            icon = "check",
+            name = "All quiet",
+            featuredValue = "All off",
+            miniValue = "All off",
+            accent = c.mint,
+        )
+    }
+
+    // 4) DELIGHT — whole-home average temperature (an aggregate no single room card shows).
+    val temps = rooms.mapNotNull { it.temp }
+    if (smart && temps.isNotEmpty()) {
+        val avg = Math.round(temps.average()).toInt()
+        cards += GlanceCard(
+            key = "smart.indoor",
+            icon = "thermo",
+            name = "Indoors",
+            featuredValue = "$avg°",
+            miniValue = "$avg°",
+            accent = c.sand,
+        )
+    }
+
+    return cards
 }
 

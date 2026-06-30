@@ -1,15 +1,14 @@
 package com.uc.homehealth.ui.viewmodel
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.uc.homehealth.data.AuthPreferences
 import com.uc.homehealth.data.NetworkLocator
 import com.uc.homehealth.data.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -34,22 +33,30 @@ class OnboardingViewModel @Inject constructor(
     private val authPreferences: AuthPreferences,
     private val userPreferences: UserPreferences,
     private val networkLocator: NetworkLocator,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    private val _name = MutableStateFlow("")
-    private val _enteredUrl = MutableStateFlow("")
-    private val _enteredLocalUrl = MutableStateFlow("")
-    private val _enteredSsidInput = MutableStateFlow("")
-    private val _enteredSsids = MutableStateFlow<List<String>>(emptyList())
-    private val _enteredToken = MutableStateFlow("")
+    // The Connect step asks the user to fetch a Home Assistant long-lived access token from
+    // their browser, then come back and paste it. While they're away the OS routinely kills
+    // this (memory-heavy) app — or "Don't keep activities" destroys it outright — and on return
+    // the activity + this ViewModel are recreated. Backing the in-progress form with
+    // SavedStateHandle (persisted into the saved-instance Bundle) restores what they typed
+    // instead of dropping them onto a blank form ("starts fresh"). SSIDs are stored as a
+    // newline-joined string — the app's standard list encoding and Bundle-safe.
+    private val _name = savedStateHandle.getStateFlow(KEY_NAME, "")
+    private val _enteredUrl = savedStateHandle.getStateFlow(KEY_URL, "")
+    private val _enteredLocalUrl = savedStateHandle.getStateFlow(KEY_LOCAL_URL, "")
+    private val _enteredSsidInput = savedStateHandle.getStateFlow(KEY_SSID_INPUT, "")
+    private val _enteredSsidsRaw = savedStateHandle.getStateFlow(KEY_SSIDS, "")
+    private val _enteredToken = savedStateHandle.getStateFlow(KEY_TOKEN, "")
 
-    val name: StateFlow<String> = _name.asStateFlow()
+    val name: StateFlow<String> = _name
 
     val uiState: StateFlow<OnboardingUiState> = combine(
         combine(userPreferences.onboardingComplete, userPreferences.demoFromOnboarding, authPreferences.authState) { c, d, a -> Triple(c, d, a) },
         _name,
-        combine(_enteredUrl, _enteredLocalUrl, _enteredSsidInput, _enteredSsids, _enteredToken) { u, l, sIn, sList, t ->
-            FormFields(u, l, sIn, sList, t)
+        combine(_enteredUrl, _enteredLocalUrl, _enteredSsidInput, _enteredSsidsRaw, _enteredToken) { u, l, sIn, sRaw, t ->
+            FormFields(u, l, sIn, splitSsids(sRaw), t)
         },
     ) { core, name, fields ->
         OnboardingUiState(
@@ -75,26 +82,27 @@ class OnboardingViewModel @Inject constructor(
         val token: String,
     )
 
-    fun onNameChange(value: String) { _name.value = value }
-    fun onUrlChange(value: String) { _enteredUrl.value = value }
-    fun onLocalUrlChange(value: String) { _enteredLocalUrl.value = value }
-    fun onSsidInputChange(value: String) { _enteredSsidInput.value = value }
-    fun onTokenChange(value: String) { _enteredToken.value = value }
+    fun onNameChange(value: String) { savedStateHandle[KEY_NAME] = value }
+    fun onUrlChange(value: String) { savedStateHandle[KEY_URL] = value }
+    fun onLocalUrlChange(value: String) { savedStateHandle[KEY_LOCAL_URL] = value }
+    fun onSsidInputChange(value: String) { savedStateHandle[KEY_SSID_INPUT] = value }
+    fun onTokenChange(value: String) { savedStateHandle[KEY_TOKEN] = value }
 
     /** Move the current typed value into the SSID list. No-op for blanks / duplicates. */
     fun addTypedSsid() {
         val v = _enteredSsidInput.value.trim()
         if (v.isEmpty()) return
-        if (v in _enteredSsids.value) {
-            _enteredSsidInput.value = ""
+        val current = splitSsids(_enteredSsidsRaw.value)
+        if (v in current) {
+            savedStateHandle[KEY_SSID_INPUT] = ""
             return
         }
-        _enteredSsids.value = _enteredSsids.value + v
-        _enteredSsidInput.value = ""
+        setSsids(current + v)
+        savedStateHandle[KEY_SSID_INPUT] = ""
     }
 
     fun removeSsid(ssid: String) {
-        _enteredSsids.value = _enteredSsids.value.filterNot { it == ssid }
+        setSsids(splitSsids(_enteredSsidsRaw.value).filterNot { it == ssid })
     }
 
     /** Returns true if the location permission is currently granted. */
@@ -107,17 +115,25 @@ class OnboardingViewModel @Inject constructor(
     fun detectSsid() {
         networkLocator.refresh()
         val ssid = networkLocator.currentSsid.value
-        if (!ssid.isNullOrBlank() && ssid !in _enteredSsids.value) {
-            _enteredSsids.value = _enteredSsids.value + ssid
+        val current = splitSsids(_enteredSsidsRaw.value)
+        if (!ssid.isNullOrBlank() && ssid !in current) {
+            setSsids(current + ssid)
         }
     }
+
+    private fun setSsids(list: List<String>) {
+        savedStateHandle[KEY_SSIDS] = list.joinToString("\n")
+    }
+
+    private fun splitSsids(raw: String): List<String> =
+        raw.split('\n').filter { it.isNotBlank() }
 
     fun finishWithConnect() {
         val remote = _enteredUrl.value.trimEnd('/')
         val local = _enteredLocalUrl.value.trimEnd('/')
         // Sweep up any text still in the typing buffer that the user forgot to commit.
         val pending = _enteredSsidInput.value.trim()
-        val ssids = (_enteredSsids.value + listOfNotNull(pending.takeIf { it.isNotEmpty() }))
+        val ssids = (splitSsids(_enteredSsidsRaw.value) + listOfNotNull(pending.takeIf { it.isNotEmpty() }))
             .distinct()
         val token = _enteredToken.value.trim()
         val nm = _name.value.trim()
@@ -142,5 +158,14 @@ class OnboardingViewModel @Inject constructor(
 
     fun clearDemoFromOnboarding() {
         viewModelScope.launch { userPreferences.setDemoFromOnboarding(false) }
+    }
+
+    private companion object {
+        const val KEY_NAME = "onb_name"
+        const val KEY_URL = "onb_url"
+        const val KEY_LOCAL_URL = "onb_local_url"
+        const val KEY_SSID_INPUT = "onb_ssid_input"
+        const val KEY_SSIDS = "onb_ssids"
+        const val KEY_TOKEN = "onb_token"
     }
 }
